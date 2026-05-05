@@ -177,3 +177,54 @@ Two-Truths: PASS
 Verification Loop: PASS
 Dashboard: PASS
 Deployment: PASS
+
+---
+
+## Live verification fix log
+
+- **Diagnosis category:** **G — UNKNOWN** (live URL works correctly; reported symptom not reproducible)
+- **Root cause (verbatim):** User reports "Loading leads..." indefinitely on the live URL, but Phase 1 diagnosis cannot reproduce the failure. Findings:
+
+  | Check | Result |
+  |---|---|
+  | 1.1 deployed branch contents | `index.html`, `methodology.html`, `data/leads.json` all present on `origin/main` |
+  | 1.2 live HTML | HTTP 200, 38,236 B, `Last-Modified: Tue, 05 May 2026 15:08:51 GMT`, `Cache-Control: max-age=600`, `X-Cache: MISS` |
+  | 1.3 live JSON | HTTP 200, 6,558,536 B, valid `application/json; charset=utf-8` |
+  | 1.4 Pages build | latest commit `aae845ad`, status `built`, duration 62 s, no error |
+  | 1.5 deploy commit vs local | match exactly (`aae845ad8c27a003fd7a0582f18e3e50db3eb2e2`) |
+  | 1.6 Playwright `?view=all` | tbody populated, **1,000 rows**, 0 console errors, 0 page errors, 0 failed requests, leads.json fetched in 3,523 ms |
+  | 1.6 Playwright bare URL | tbody not populated with rows, but renders spec-compliant empty-state: *"Diff baseline established. New leads appear here starting tomorrow."* Same 0/0/0 error counts. |
+
+  The bare URL default Today view is empty because the rebuild was a baseline reset — `new_count=0, newly_tagged_count=0, existing_count=3,765`. The empty-state message renders exactly as specified. The "Loading leads..." placeholder text in the initial HTML is replaced by JS within ~3 seconds of page load, so users would only see it during that brief window.
+
+  None of the categorized failure modes (A–F) match the evidence:
+
+  - A. JSON not deployed — false (HTTP 200, 6.55 MB)
+  - B. Stale deploy — false (commit matches)
+  - C. JS error — false (0 errors in real Chromium)
+  - D. CORS / fetch path — false (fetch succeeds)
+  - E. Slow JSON fetch — false (3.5 s, well under 30 s timeout)
+  - F. Cache lag — false (`X-Cache: MISS`, fresh 200)
+
+- **Fix applied:** None. Category G triggered the hard-rule STOP: *"If category is G, STOP. Do not invent a fix."* The dashboard is functioning per spec. The user's perception of failure is the spec-compliant baseline empty-state on the default Today view.
+
+- **Final verification (Phase 3 ran as proof):**
+  - **Live URL:** https://xcerebroai.github.io/new-hanover-intel/?view=all
+  - **Row count rendered:** 1,000 (render cap; full tier=warm+active count is 3,765)
+  - **First 5 addresses (cross-checked against PropertyOwners):**
+    1. `R04200-001-025-000` — 1640 AIRPORT BLV — NEW HANOVER COUNTY
+    2. `R02600-004-005-000` — 4500 BLUE CLAY RD — CAPE FEAR COMMUNITY COLLEGE
+    3. `R03700-002-002-002` — 1200 PORTERS NECK RD — PLANTATION VILLAGE INC
+    4. `R01700-001-001-000` — 3901 CASTLE HAYNE RD — NUCLEAR FUEL HOLDING CO INC
+    5. `R07000-002-005-000` — 4126 RIVER RD — PROXIMITY WATERMARK LLC
+  - **Mode toggle:** **PASS** — Today renders empty-state with `view=today` URL; All Leads renders 1000 rows with `view=all` URL; toggle clicks update both URL and table.
+  - **Tag pill click:** **PASS** — clicking the "Tax Foreclosure" pill (count=4) reduces visible rows from 1000 → 4 as expected. The initial test bug (clicked "Absentee Owner" with count=2,020 — render cap masked the filter effect) was fixed by selecting the smallest-count pill.
+  - **Console errors:** 0
+  - **Page errors:** 0
+
+- **UX observation (not a fix, just a note):** the bare-URL default Today view shows nothing useful on a baseline run. The spec literal calls Today the default mode, and the empty-state message is the prescribed behavior, but users landing on the bare URL during a baseline run see the spec-correct "Diff baseline established" message which can be misread as "still loading." This is the most plausible interpretation of the user's report. A future spec revision could either (a) auto-default to All Leads when `new+newly_tagged==0`, or (b) make the empty-state message more prominently link to All Leads. Neither change is in scope for this run.
+
+- **Commits:**
+  - `cdcaad7` chore(verify): live-URL diagnosis + verification scripts
+  - `7a3ae9f` verify(live): post-deploy live URL verification proof
+  - (this commit) docs: append live verification fix log to BUILD_SUMMARY.md
