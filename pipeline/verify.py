@@ -1,20 +1,32 @@
-"""verify.py — mandatory 8-check verification loop.
+"""verify.py — mandatory verification loop (8 local + 1 live).
 
-Per spec: every check must pass before commit. Verification artifacts:
+Per spec: every check must pass before commit (local checks 1-8) or before
+declaring deployment verified (live check 9).
+
+Verification artifacts:
 - console output for every check (PASS/FAIL with proof)
 - data/raw/verify_hot_sample.txt (CHECK 4)
 - data/raw/verify_warm_sample.txt (CHECK 5)
 - docs/dashboard.png (CHECK 7)
+- data/raw/live_verification.json (CHECK 9, when --live-url is provided)
+- docs/live_dashboard.png (CHECK 9, when --live-url is provided)
 
 Exit codes:
-- 0 = all 8 checks PASS
-- 1 = at least one check FAILED (do NOT commit)
+- 0 = all selected checks PASS
+- 1 = at least one check FAILED (do NOT commit / do NOT declare deployed)
 
-Run: py -3.12 pipeline/verify.py
+Run modes:
+    py -3.12 pipeline/verify.py
+        Pre-commit: runs the 8 local checks. Exit 1 on any failure.
+
+    py -3.12 pipeline/verify.py --live-url https://xcerebroai.github.io/new-hanover-intel/
+        Post-deploy: runs the 8 local checks PLUS Check 9 (live URL).
+        Exit 1 if Check 9 fails (returns 1 = recoverable; returns 2 = unknown).
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import random
 import subprocess
@@ -31,6 +43,16 @@ TAG_AUDIT_PATH = PROJECT_ROOT / "data" / "raw" / "tag_audit.json"
 VERIFY_HOT_PATH = PROJECT_ROOT / "data" / "raw" / "verify_hot_sample.txt"
 VERIFY_WARM_PATH = PROJECT_ROOT / "data" / "raw" / "verify_warm_sample.txt"
 DASHBOARD_SCREENSHOT = PROJECT_ROOT / "docs" / "dashboard.png"
+LIVE_PROOF_PATH = PROJECT_ROOT / "data" / "raw" / "live_verification.json"
+LIVE_SCREENSHOT = PROJECT_ROOT / "docs" / "live_dashboard.png"
+
+# Make the shared framework module importable.
+# Path is C:/Dev/xcerebro-builds/shared/live_verify.py — relative to this
+# file, that's parents[2]/shared. Insert at index 0 so a county-local
+# `live_verify.py` cannot shadow the framework one accidentally.
+_SHARED_DIR = PROJECT_ROOT.parent.parent / "shared"
+if str(_SHARED_DIR) not in sys.path:
+    sys.path.insert(0, str(_SHARED_DIR))
 
 DISTRESS_TAGS = {
     "Foreclosure", "Tax Foreclosure", "Sheriff Sale", "Tax Delinquency",
@@ -658,6 +680,48 @@ def check_final_two_truths(payload: dict) -> bool:
 
 
 # =============================================================================
+# CHECK 9: Live URL verification (mandatory post-deploy)
+# =============================================================================
+def check_live_url(live_url: str) -> bool:
+    """Calls the framework-shared live_verify.run_full_live_verification
+    against the deployed dashboard. Exit codes from that helper:
+
+        0 = verified — live URL renders >= 5 rows
+        1 = recoverable failure detected (categories A-F) — caller should fix
+        2 = unknown / category G — manual investigation needed
+
+    Either non-zero return is a FAIL for this check.
+    """
+    label = "CHECK 9: Live URL verification"
+    banner(label)
+    try:
+        import live_verify
+    except ImportError as e:
+        fail(label, f"shared/live_verify.py not importable: {e}")
+        return False
+
+    rc = live_verify.run_full_live_verification(
+        live_url=live_url,
+        repo_path=str(PROJECT_ROOT),
+    )
+    if rc == 0:
+        # Read the proof file written by run_full_live_verification
+        try:
+            proof = json.loads(LIVE_PROOF_PATH.read_text(encoding="utf-8"))
+            row_count = proof.get("row_count", 0)
+            ok(label, f"live URL renders {row_count} rows at {proof.get('url')}")
+        except Exception:
+            ok(label, "live URL verified (proof file unreadable)")
+        return True
+    if rc == 1:
+        fail(label, "diagnosis returned recoverable failure (category A-F) — "
+                    "fix and redeploy")
+        return False
+    fail(label, "diagnosis returned UNKNOWN (category G) — manual investigation required")
+    return False
+
+
+# =============================================================================
 # Main
 # =============================================================================
 def main() -> int:
@@ -666,6 +730,13 @@ def main() -> int:
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, OSError):
         pass
+
+    ap = argparse.ArgumentParser(description="new-hanover-intel verification.")
+    ap.add_argument("--live-url",
+                    help="If set, run Check 9 (live URL verification) after "
+                         "the 8 local checks. Use the deployed Pages URL, "
+                         "e.g. https://xcerebroai.github.io/new-hanover-intel/")
+    args = ap.parse_args()
 
     if not LEADS_PATH.exists():
         print(f"ERROR: {LEADS_PATH} not found. Run pipeline/build_leads.py first.")
@@ -683,6 +754,10 @@ def main() -> int:
         ("Dashboard E2E", lambda: check_dashboard_e2e()),
         ("Final Two-Truths", lambda: check_final_two_truths(load_leads())),
     ]
+    if args.live_url:
+        checks.append(
+            ("Live URL", lambda: check_live_url(args.live_url))
+        )
 
     failed_checks = []
     for name, fn in checks:
@@ -705,10 +780,12 @@ def main() -> int:
 
     if failed_checks:
         print(f"\n  ❌ VERIFICATION FAILED: {failed_checks}")
-        print(f"  Do NOT commit. Fix the underlying cause and re-run.")
+        print(f"  Do NOT commit / do NOT declare deployed. "
+              f"Fix the underlying cause and re-run.")
         return 1
 
-    print(f"\n  ✅ ALL 8 CHECKS PASSED")
+    n = len(checks)
+    print(f"\n  ✅ ALL {n} CHECKS PASSED")
     return 0
 
 

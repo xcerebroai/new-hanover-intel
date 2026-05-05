@@ -1,6 +1,7 @@
 {
+  "ok": true,
   "url": "https://xcerebroai.github.io/new-hanover-intel/?view=all",
-  "verified_at": "2026-05-05T18:08:55.334710+00:00",
+  "verified_at": "2026-05-05T18:19:54.502420+00:00",
   "row_count": 1000,
   "first_5_pids": [
     "R04200-001-025-000",
@@ -16,18 +17,11 @@
     "3901 CASTLE HAYNE RD",
     "4126 RIVER RD"
   ],
-  "screenshot": "docs\\live_dashboard.png",
-  "mode_toggle": "PASS",
-  "tag_pill_click": "PASS",
-  "today_view_state": {
-    "url": "https://xcerebroai.github.io/new-hanover-intel/?view=today",
-    "row_count": 0,
-    "empty_state": 1
-  },
-  "all_view_state": {
-    "url": "https://xcerebroai.github.io/new-hanover-intel/?view=all",
-    "row_count": 1000
-  },
+  "screenshot_path": "C:\\Dev\\xcerebro-builds\\projects\\new-hanover-intel\\docs\\live_dashboard.png",
   "console_errors": [],
-  "page_errors": []
+  "page_errors": [],
+  "failed_requests": [],
+  "leads_json_fetch_ms": 8,
+  "elapsed_ms": 922,
+  "error": null
 }
