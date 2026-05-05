@@ -139,6 +139,23 @@ def make_session(ua: str) -> requests.Session:
     return s
 
 
+def _post_retry(s: requests.Session, url: str, data, retries: int = 3,
+                 timeout: int = 90) -> requests.Response:
+    last_err: Exception | None = None
+    for attempt in range(retries):
+        try:
+            r = s.post(url, data=data, timeout=timeout)
+            r.raise_for_status()
+            return r
+        except (requests.exceptions.RequestException, ConnectionError) as e:
+            last_err = e
+            wait = 5 * (attempt + 1)
+            print(f"  [retry {attempt+1}/{retries}] {type(e).__name__}: {e} — sleeping {wait}s",
+                  file=sys.stderr)
+            time.sleep(wait)
+    raise RuntimeError(f"POST failed after {retries} retries: {url} ({last_err})")
+
+
 def post_namepick(s: requests.Session, codes: Iterable[str],
                    start: str, end: str) -> tuple[int, list[str]]:
     """POST NamePick.php for the given codes + date range. Returns
@@ -158,8 +175,7 @@ def post_namepick(s: requests.Session, codes: Iterable[str],
     for code in codes:
         data.append((f"instType[InstCodes][{code}]", code))
 
-    r = s.post(f"{BASE}/NamePick.php", data=data, timeout=60)
-    r.raise_for_status()
+    r = _post_retry(s, f"{BASE}/NamePick.php", data)
     text = r.text
     m = NAMES_FOUND_RE.search(text)
     names_found = int(m.group(1)) if m else 0
@@ -172,8 +188,7 @@ def post_namedisplay(s: requests.Session, entity_ids: list[str]) -> str:
         return ""
     data: list[tuple[str, str]] = [(f"entityID[{i}]", i) for i in entity_ids]
     data.append(("displaybutton", "Display Detail Listing"))
-    r = s.post(f"{BASE}/NameDisplay.php", data=data, timeout=60)
-    r.raise_for_status()
+    r = _post_retry(s, f"{BASE}/NameDisplay.php", data)
     return r.text
 
 
