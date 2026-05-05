@@ -225,6 +225,6 @@ Deployment: PASS
 - **UX observation (not a fix, just a note):** the bare-URL default Today view shows nothing useful on a baseline run. The spec literal calls Today the default mode, and the empty-state message is the prescribed behavior, but users landing on the bare URL during a baseline run see the spec-correct "Diff baseline established" message which can be misread as "still loading." This is the most plausible interpretation of the user's report. A future spec revision could either (a) auto-default to All Leads when `new+newly_tagged==0`, or (b) make the empty-state message more prominently link to All Leads. Neither change is in scope for this run.
 
 - **Commits:**
-  - `cdcaad7` chore(verify): live-URL diagnosis + verification scripts
-  - `7a3ae9f` verify(live): post-deploy live URL verification proof
-  - (this commit) docs: append live verification fix log to BUILD_SUMMARY.md
+  - `4b1d94f` chore(verify): add live-URL diagnosis + verification scripts
+  - `5a7bf55` verify(live): post-deploy live URL verification proof
+  - `47c2542` docs: append live verification fix log to BUILD_SUMMARY.md
