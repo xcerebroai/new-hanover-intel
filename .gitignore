@@ -1,6 +1,8 @@
 # Raw scraped data — never committed (rebuilt on every refresh)
 data/raw/*
 !data/raw/.gitkeep
+# Live-URL verification proof is intentionally tracked (spec Phase 4)
+!data/raw/live_verification.json
 *.jsonl
 *.log
 
