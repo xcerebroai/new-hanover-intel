@@ -1,32 +1,22 @@
 """build_leads.py — New Hanover County motivated-seller lead pipeline.
 
-Joins all data/raw/*.jsonl signal feeds against the PropertyOwners master
-parcel table and writes data/leads.json — the dashboard's input.
+Tag-taxonomy build. Replaces the prior 6-pattern array on each lead with a
+``tags[]`` array of operator-language strings. Tier comes from DISTRESS
+TAG count only — owner-profile and derived tags are filters, not tier
+contributors.
 
-Sources joined (per RECON.md):
-  property_owners_layer0       — parcel master (PARID is the global join key)
-  delinquent_tax               — county delinquent-tax CSV (direct PARID)
-  nhc_foreclosures             — county GS 105-374 schedule (direct PARID)
-  energov_permits_demolition   — building-permit demolitions (direct PARID)
-  energov_permits_floodplain_development
-  energov_permits_occupancy_certification
-  nhc_stormwater               — stormwater permits (direct PARID/PID)
-  starnews_notice_to_creditors — probate notices (decedent → owner-name join)
-  starnews_foreclosures        — foreclosure notices (address join)
-  rod_<doctype>                — register of deeds (no PID — owner+address join)
+Output schema (top-level):
 
-Output schema follows the FRAMEWORK_SPEC §3 contract:
-  generated_at, source_commit, total, tier_counts, pattern_counts,
-  source_attach_counts, doc_type_counts, transfer_rule_counts,
-  warm_tier_high_confidence_pct, top_pattern_combos, records[]
+    { "header": {...}, "records": [...] }
 
-Tier from STACK DEPTH (count of distinct patterns) — never from score sum.
-Two-Truths check runs before write: header counts must equal counts derived
-from records[]; mismatch raises and exits non-zero.
+Two-Truths invariant: ``header.tag_counts`` and ``header.tier_counts`` are
+recomputed from ``records[]`` immediately before write. Mismatch raises and
+exits non-zero — no file is written, no rotation occurs.
 
-The dashboard's matches(filters, lead) function reuses the patterns + flags
-this pipeline emits — single source of truth for filter counts AND filter
-results.
+Diff invariant: ``new_count + newly_tagged_count + existing_count`` must
+equal ``total_records``. First run after schema change archives the prior
+``leads.previous.json`` (if it has the old "patterns" schema) and stamps
+every record ``_diff_status = "existing"`` as a baseline.
 """
 
 from __future__ import annotations
@@ -34,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 from collections import Counter, defaultdict
@@ -42,8 +33,10 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = PROJECT_ROOT / "data" / "raw"
+ARCHIVE_DIR = RAW_DIR / "archive"
 OUT_PATH = PROJECT_ROOT / "data" / "leads.json"
 PREV_PATH = PROJECT_ROOT / "data" / "leads.previous.json"
+TAG_AUDIT_PATH = RAW_DIR / "tag_audit.json"
 
 PARCEL_PATH = RAW_DIR / "property_owners_layer0.jsonl"
 DELQ_PATH = RAW_DIR / "delinquent_tax.jsonl"
@@ -54,60 +47,77 @@ ENERGOV_OCC_PATH = RAW_DIR / "energov_permits_occupancy_certification.jsonl"
 STORMWATER_PATH = RAW_DIR / "nhc_stormwater.jsonl"
 STARNEWS_NTC_PATH = RAW_DIR / "starnews_notice_to_creditors.jsonl"
 STARNEWS_FCL_PATH = RAW_DIR / "starnews_foreclosures.jsonl"
+ROD_FORECLOSURE_PATH = RAW_DIR / "rod_foreclosure.jsonl"
+ROD_ESTATE_DEED_PATH = RAW_DIR / "rod_estate_deed.jsonl"
+ROD_JUDGMENT_PATH = RAW_DIR / "rod_judgment.jsonl"
+ROD_LIEN_PATH = RAW_DIR / "rod_lien.jsonl"
+ROD_QUITCLAIM_PATH = RAW_DIR / "rod_quitclaim.jsonl"
+ROD_DOT_PATH = RAW_DIR / "rod_deed_of_trust.jsonl"
 
-ROD_DOCTYPES = [
-    "deed", "quitclaim", "deed_of_trust", "assignment", "satisfaction",
-    "foreclosure", "estate_deed", "judgment", "lien",
-    "deed_of_gift", "separation",
+# ---------- Tag taxonomy ----------
+DISTRESS_TAGS = [
+    "Foreclosure",
+    "Tax Foreclosure",
+    "Sheriff Sale",
+    "Tax Delinquency",
+    "Mechanics Lien",
+    "Judgment",
+    "Lis Pendens",
+    "Estate / Probate",
+    "Demolition Order",
+    "Quitclaim",
+    "Stormwater Issue",
 ]
+OWNER_TAGS = [
+    "Absentee Owner",
+    "Out-of-State Owner",
+    "Long-Term Ownership",
+    "Free & Clear",
+    "Senior Owner",
+]
+DERIVED_TAGS = ["Distressed Transfer", "Post-Estate Sale"]
+ALL_TAGS = DISTRESS_TAGS + OWNER_TAGS + DERIVED_TAGS
 
-PATTERNS = ["jfc", "tax", "estate", "code", "lien", "transfer"]
 TIER_HOT = "hot"
 TIER_WARM = "warm"
 TIER_ACTIVE = "active"
 
-SIGNAL_CAP_PER_PATTERN = 3
-DELINQUENCY_MIN_DUE = 500.0  # filter administrative pennies
+DELINQUENCY_MIN_DUE = 500.0
+DISTRESSED_TRANSFER_DAYS = 730
+POST_ESTATE_DAYS = 548  # 18 months
+LONG_TERM_OWNERSHIP_YRS = 20
 
-PARID_RE = re.compile(r"R\d{5}-\d{3}-\d{3}-\d{3}")
+# Doc-code matchers (normalized: uppercase, punctuation removed, whitespace
+# collapsed). Per spec — exact list, no improvisation.
+MECHANICS_LIEN_CODES = {"ML", "MECH", "MECHANICSLIEN", "MECHANICLIEN"}
+LIS_PENDENS_CODES = {"LP", "LISPEN", "LISPENDENS"}
 
-# Common surnames — used to gate decedent/grantor 2-word fallback matches.
-# A "JONES JOHN" join against POLARIS would hit hundreds of parcels.
-COMMON_SURNAMES = {
-    "SMITH", "JOHNSON", "WILLIAMS", "BROWN", "JONES", "GARCIA", "MILLER",
-    "DAVIS", "RODRIGUEZ", "MARTINEZ", "HERNANDEZ", "LOPEZ", "GONZALEZ",
-    "WILSON", "ANDERSON", "THOMAS", "TAYLOR", "MOORE", "JACKSON", "MARTIN",
-    "LEE", "PEREZ", "THOMPSON", "WHITE", "HARRIS", "SANCHEZ", "CLARK",
-    "RAMIREZ", "LEWIS", "ROBINSON", "WALKER", "YOUNG", "ALLEN", "KING",
-    "WRIGHT", "SCOTT", "TORRES", "NGUYEN", "HILL", "FLORES", "GREEN",
-    "ADAMS", "NELSON", "BAKER", "HALL", "RIVERA", "CAMPBELL", "MITCHELL",
-    "CARTER", "ROBERTS",
+# Estate/Probate ROD doc-types we accept. TRUSTEES DEED and SHERIFF DEED are
+# court-ordered foreclosure-context deeds and are NOT decedent estate
+# instruments — exclude them from this tag.
+ESTATE_DEED_CODES = {
+    "ADMINDEED", "ADMINISTRATORSDEED", "ADMINISTRATORDEED",
+    "EXECDEED", "EXECUTORDEED", "EXECUTORSDEED",
+    "EXTRXDEED", "EXECUTRIXDEED",
 }
 
-ENTITY_TOKENS = {
-    "LLC", "L.L.C", "L L C", "INC", "INCORPORATED", "CORP", "CORPORATION",
-    "CO.", "COMPANY", "TRUST", "TRUSTEE", "LP", "LLP", "L.P", "L.L.P",
-    "PLLC", "PA", "P.A", "ASSOCIATES", "ASSOCIATION", "ASSOC", "FOUNDATION",
-    "LIMITED", "PARTNERS", "PARTNERSHIP", "ESTATE OF",
-}
-LANDLORD_TOKENS = {
-    "RENTAL", "RENTALS", "PROPERTIES", "PROPERTY", "HOLDINGS", "INVESTMENTS",
-    "REALTY", "REAL ESTATE", "HOMES", "RE LLC", "REI", "GROUP",
-}
-NAME_NOISE = {
-    "INC", "INCORPORATED", "LLC", "L L C", "LP", "L P", "PLLC",
-    "CORP", "CORPORATION", "CO",
-    "TRUST", "TRUSTEE", "REVOCABLE", "LIVING",
-    "ETAL", "ET AL", "ET UX",
-    "JR", "SR", "II", "III", "IV",
-    "ESTATE", "DECEASED",
-    "FAMILY", "IRREVOCABLE",
-    "FOUNDATION",
-}
-NAME_SUFFIXES = {"JR", "SR", "II", "III", "IV", "V"}
+# Body-content keywords that have to appear in a starnews_foreclosures
+# notice for it to count as a foreclosure. The starnews "foreclosures-
+# sheriff-sales" category at Gannett occasionally cross-posts unrelated
+# notices (NTC, CAMA permits, etc.) — content-filter to avoid misemission.
+FORECLOSURE_BODY_KW = (
+    "FORECLOSURE", "TRUSTEE", "TRUSTEES SALE", "TRUSTEE SALE",
+    "NOTICE OF SALE", "SUBSTITUTE TRUSTEE", "POWER OF SALE",
+    "SHERIFF SALE", "SHERIFF'S SALE", "SHERIFFS SALE",
+)
 
 NUM_RE = re.compile(r"^\s*(\d+)")
 NON_ALNUM_RE = re.compile(r"[^A-Z0-9 ]")
+ADDR_FROM_BODY_RE = re.compile(
+    r"\b(\d{2,5}\s+[A-Z][A-Z0-9 .'-]+?(?:STREET|ST|AVENUE|AVE|ROAD|RD|"
+    r"DRIVE|DR|LANE|LN|COURT|CT|CIRCLE|CIR|PLACE|PL|BOULEVARD|BLVD|"
+    r"TRAIL|TRL|WAY|PARKWAY|PKWY|TERRACE|TER|HIGHWAY|HWY))\b"
+)
 
 STREET_SUFFIX = {
     "ST": "ST", "STREET": "ST",
@@ -128,64 +138,43 @@ STREET_SUFFIX = {
     "RUN": "RUN", "PT": "PT", "POINT": "PT",
 }
 
+ENTITY_TOKENS = {
+    "LLC", "L.L.C", "L L C", "INC", "INCORPORATED", "CORP", "CORPORATION",
+    "CO.", "COMPANY", "TRUST", "TRUSTEE", "LP", "LLP", "L.P", "L.L.P",
+    "PLLC", "PA", "P.A", "ASSOCIATES", "ASSOCIATION", "ASSOC", "FOUNDATION",
+    "LIMITED", "PARTNERS", "PARTNERSHIP", "ESTATE OF",
+}
+LANDLORD_TOKENS = {
+    "RENTAL", "RENTALS", "PROPERTIES", "PROPERTY", "HOLDINGS", "INVESTMENTS",
+    "REALTY", "REAL ESTATE", "HOMES", "RE LLC", "REI", "GROUP",
+}
+NAME_SUFFIXES = {"JR", "SR", "II", "III", "IV", "V"}
 
-# ----------------------------------------------------------------------
-# Normalization helpers
-# ----------------------------------------------------------------------
+# US 2-letter state abbreviations (excluded territories DC + PR included
+# because they appear in mailing addresses).
+US_STATES = {
+    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN",
+    "IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV",
+    "NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN",
+    "TX","UT","VT","VA","WA","WV","WI","WY","DC","PR",
+}
 
-def normalize_owner(name: str) -> str:
-    if not name:
+
+# ---------- Normalization helpers ----------
+
+def norm_doc_code(code: str) -> str:
+    """Uppercase + strip punctuation + collapse whitespace.
+
+    e.g. 'M/L' -> 'ML', 'LIS PENDENS' -> 'LISPENDENS'.
+    """
+    if not code:
         return ""
-    n = NON_ALNUM_RE.sub(" ", name.upper())
-    parts = [p for p in n.split() if p and p not in NAME_NOISE]
-    return " ".join(parts)
-
-
-def owner_keys(normalized: str) -> list[str]:
-    """Build keys for fuzzy owner matching."""
-    parts = [p for p in normalized.split() if p]
-    if len(parts) < 2:
-        return []
-    keys: list[str] = []
-    a, b = parts[0], parts[1]
-    if len(a) + len(b) >= 8:
-        keys.append(f"{a} {b}")
-        keys.append(f"{b} {a}")
-    if len(parts) >= 3:
-        c = parts[2]
-        keys.append(f"{a} {b} {c}")
-        keys.append(f"{c} {b} {a}")
-        keys.append(f"{c} {a} {b}")
-        if len(a) + len(c) >= 8:
-            keys.append(f"{a} {c}")
-            keys.append(f"{c} {a}")
-    return keys
-
-
-def decedent_match_keys(decedent_normalized: str) -> list[str]:
-    """Tighter than owner_keys — refuses to match on common-surname two-word
-    fallbacks. Used for estate notice → owner joins where false positives
-    multiply across thousands of parcels."""
-    parts = [p for p in decedent_normalized.split() if p]
-    if len(parts) < 2:
-        return []
-    keys: list[str] = []
-    if len(parts) >= 3:
-        keys.append(" ".join(parts[:3]))
-        keys.append(f"{parts[2]} {parts[1]} {parts[0]}")
-        keys.append(f"{parts[-1]} {parts[0]} {parts[1]}")
-    last = parts[-1]
-    first = parts[0]
-    if len(last) >= 5 and last not in COMMON_SURNAMES:
-        keys.append(f"{first} {last}")
-        keys.append(f"{last} {first}")
-    return list(dict.fromkeys(keys))
+    s = code.upper()
+    s = re.sub(r"[^A-Z0-9]", "", s)
+    return s
 
 
 def normalize_street(street_full: str) -> tuple[str, str]:
-    """Returns (street_number, normalized_streetname).
-    Strips city/state/zip suffix and unit info.
-    """
     if not street_full:
         return ("", "")
     s = street_full.upper()
@@ -228,11 +217,8 @@ def is_landlord_entity(owner: str) -> bool:
 
 
 def parse_owner_name(own1: str) -> dict:
-    """Split OWN1 (e.g. 'GOLASKI LORIEN ETAL', 'CITY OF WILMINGTON',
-    'ABC HOLDINGS LLC') into first/middle/last/suffix/is_entity.
-
-    NHC's PropertyOwners packs the full name into a single OWN1 field,
-    typically "LASTNAME FIRSTNAME [MIDDLE] [SUFFIX]" for individuals.
+    """NHC OWN1 packs the full name into one field, typically
+    "LASTNAME FIRSTNAME [MIDDLE] [SUFFIX]" for individuals.
     """
     full = (own1 or "").strip()
     if is_entity_owner(full):
@@ -245,7 +231,7 @@ def parse_owner_name(own1: str) -> dict:
     if not parts:
         return {"first_name": "", "middle_name": "", "last_name": "",
                 "suffix": suffix, "is_entity": False, "full_name": full}
-    last = parts[0]  # NHC OWN1 format: LAST FIRST MIDDLE
+    last = parts[0]
     first = parts[1] if len(parts) >= 2 else ""
     middle = " ".join(parts[2:]) if len(parts) >= 3 else ""
     return {"first_name": first, "middle_name": middle, "last_name": last,
@@ -253,7 +239,6 @@ def parse_owner_name(own1: str) -> dict:
 
 
 def _f(v) -> float | None:
-    """Tolerant float parse for fields that come in as strings."""
     if v is None or v == "":
         return None
     try:
@@ -287,7 +272,6 @@ def _ms_to_dt(v) -> datetime | None:
 
 
 def _parse_sale_date(v) -> datetime | None:
-    """SALE_DATE comes in as 'YYYY-MM-DD HH:MM:SS' or epoch ms or empty."""
     dt = _ms_to_dt(v)
     if dt:
         return dt
@@ -302,9 +286,25 @@ def _parse_sale_date(v) -> datetime | None:
     return None
 
 
-# ----------------------------------------------------------------------
-# Loaders
-# ----------------------------------------------------------------------
+def _parse_iso_or_date(s: str) -> datetime | None:
+    if not s:
+        return None
+    s = str(s).strip()
+    for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d", "%m/%d/%Y", "%B %d, %Y"):
+        try:
+            dt = datetime.strptime(s, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(s).astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+# ---------- Loaders ----------
 
 def load_jsonl(path: Path) -> list[dict]:
     if not path.exists():
@@ -322,15 +322,14 @@ def load_jsonl(path: Path) -> list[dict]:
     return out
 
 
-def load_parcel_master(path: Path, log) -> tuple[dict, dict, dict]:
-    """Returns (by_pid, by_addr_key, by_owner_key)."""
+def load_parcel_master(path: Path, log) -> tuple[dict, dict]:
+    """Returns (by_pid, by_addr_key)."""
     by_pid: dict[str, dict] = {}
     by_addr: dict[tuple[str, str], list[str]] = defaultdict(list)
-    by_owner: dict[str, set[str]] = defaultdict(set)
     log(f"[parcels] reading {path.name}...")
     if not path.exists():
         log(f"[!] parcel master missing: {path} — pipeline cannot proceed")
-        return {}, {}, {}
+        return {}, {}
     n = 0
     with path.open(encoding="utf-8") as fh:
         for line in fh:
@@ -352,13 +351,12 @@ def load_parcel_master(path: Path, log) -> tuple[dict, dict, dict]:
             ])).strip()
             site_num, site_name = normalize_street(site_addr)
             mail_num, mail_name = normalize_street(mail_addr)
-            absentee = bool(site_name and mail_name and (site_name != mail_name or site_num != mail_num))
-
+            absentee = bool(
+                site_name and mail_name and (
+                    site_name != mail_name or site_num != mail_num
+                )
+            )
             sale_dt = _parse_sale_date(r.get("SALE_DATE"))
-            sale_price = _f(r.get("SALE_PRICE"))
-            apr_total = _f(r.get("APRTOT"))
-            apr_land = _f(r.get("APRLAND"))
-            apr_bldg = _f(r.get("APRBLDG"))
 
             entry = {
                 "parid": pid,
@@ -380,50 +378,96 @@ def load_parcel_master(path: Path, log) -> tuple[dict, dict, dict]:
                 "class_code": (r.get("CLASS") or "").strip(),
                 "sfla": _i(r.get("SFLA")),
                 "sale_date_iso": sale_dt.isoformat() if sale_dt else "",
-                "sale_price": sale_price,
+                "sale_price": _f(r.get("SALE_PRICE")),
                 "sale_instrument": (r.get("SALE_INSTRUMENT") or "").strip(),
                 "sale_book": (r.get("SALE_BOOK") or "").strip(),
                 "sale_page": (r.get("SALE_PAGE") or "").strip(),
-                "apr_total": apr_total,
-                "apr_land": apr_land,
-                "apr_bldg": apr_bldg,
+                "apr_total": _f(r.get("APRTOT")),
+                "apr_land": _f(r.get("APRLAND")),
+                "apr_bldg": _f(r.get("APRBLDG")),
                 "apr_taxyr": _i(r.get("APRVAL_TAXYR")),
             }
             by_pid[pid] = entry
             if site_num and site_name:
                 by_addr[(site_num, site_name)].append(pid)
-            normalized = normalize_owner(owner)
-            for k in owner_keys(normalized):
-                if len(k) >= 4:
-                    by_owner[k].add(pid)
             n += 1
-    log(f"[parcels] indexed {n:,} parcels  addr_keys={len(by_addr):,}  owner_keys={len(by_owner):,}")
-    return by_pid, dict(by_addr), dict(by_owner)
+    log(f"[parcels] indexed {n:,} parcels  addr_keys={len(by_addr):,}")
+    return by_pid, dict(by_addr)
 
 
-# ----------------------------------------------------------------------
-# Lead aggregation
-# ----------------------------------------------------------------------
+def evaluate_senior_coverage(path: Path, log) -> bool:
+    """Return True only if a senior/elderly exemption field exists with > 5%
+    coverage. Otherwise log + return False so the Senior Owner tag is
+    globally suppressed.
+    """
+    if not path.exists():
+        return False
+    n = 0
+    populated = 0
+    senior_field_seen = False
+    candidates = ("EXEMPTION", "EXEMPTIONS", "EXEMPT_CODE", "EXEMPT", "SENIOR",
+                  "ELDERLY", "AGE_EXEMPTION", "EXEMPT_TYPE")
+    with path.open(encoding="utf-8") as fh:
+        for line in fh:
+            r = json.loads(line)
+            n += 1
+            for k in r:
+                ku = k.upper()
+                if any(c in ku for c in ("EXEMPT", "SENIOR", "ELDER")):
+                    senior_field_seen = True
+                    v = str(r[k] or "").upper()
+                    if v and ("ELDER" in v or "SENIOR" in v or "OVER 65" in v
+                              or "AGE" in v):
+                        populated += 1
+            if n >= 5000:
+                break
+    if not senior_field_seen:
+        log("[senior] no senior/elderly field detected in PropertyOwners -- "
+            "Senior Owner tag GLOBALLY SUPPRESSED")
+        return False
+    coverage = populated / n if n else 0.0
+    if coverage <= 0.05:
+        log(f"[senior] field coverage = {coverage*100:.2f}% (<=5%) -- "
+            "Senior Owner tag GLOBALLY SUPPRESSED")
+        return False
+    log(f"[senior] field coverage = {coverage*100:.2f}% -- tag enabled")
+    return True
+
+
+# ---------- Tag emission ----------
+
+def attach_tag(lead: dict, tag: str, signal: dict) -> None:
+    if tag not in lead["tags"]:
+        lead["tags"].append(tag)
+    lead["signals"].setdefault(tag, []).append(signal)
+
 
 def _get_lead(leads: dict, pid: str) -> dict:
     if pid not in leads:
         leads[pid] = {
             "pid": pid,
-            "patterns": set(),
-            "signals": {p: [] for p in PATTERNS},
-            "flags": [],
-            "doc_types": set(),
+            "tags": [],
+            "signals": {},
         }
     return leads[pid]
 
 
-def join_signals(by_pid: dict, by_addr: dict, by_owner: dict, log) -> tuple[dict, dict]:
-    """Walk every signal source, attach to PIDs. Returns (leads, source_counts)."""
-    leads: dict[str, dict] = {}
-    source_counts: dict[str, int] = defaultdict(int)
+def emit_tags(by_pid: dict, by_addr: dict, senior_enabled: bool, log
+              ) -> tuple[dict, dict, dict]:
+    """Walk every signal source and emit tags per the deterministic spec
+    table. Returns (leads, source_signal_counts, source_files_per_tag).
 
-    # ---- delinquent_tax: direct PARID join ----
-    delq_attached = delq_unmatched = delq_filtered = 0
+    Joins are STRICT per spec:
+        1. Exact PID match preferred
+        2. Address-key match if PID missing
+        3. Owner/grantor-name-alone matches are DROPPED
+    """
+    leads: dict[str, dict] = {}
+    source_signal_counts: Counter = Counter()
+    sources_per_tag: dict[str, set[str]] = defaultdict(set)
+
+    # ---- Tax Delinquency (delinquent_tax → PID) ----
+    delq_attached = delq_filtered = delq_unmatched = 0
     delq_by_pid: dict[str, list[dict]] = defaultdict(list)
     for r in load_jsonl(DELQ_PATH):
         pid = (r.get("parcel") or "").strip()
@@ -438,12 +482,9 @@ def join_signals(by_pid: dict, by_addr: dict, by_owner: dict, log) -> tuple[dict
         delq_attached += 1
     for pid, rows in delq_by_pid.items():
         lead = _get_lead(leads, pid)
-        lead["patterns"].add("tax")
-        lead["doc_types"].add("DELQ")
-        # Sum across multi-jurisdiction rows for this parcel
-        total = sum((r.get("total_due") or 0) for r in rows)
         for r in rows:
-            lead["signals"]["tax"].append({
+            attach_tag(lead, "Tax Delinquency", {
+                "tag": "Tax Delinquency",
                 "source": "nhc_delinquent_csv",
                 "doc_type": "DELQ",
                 "name": r.get("name"),
@@ -453,29 +494,22 @@ def join_signals(by_pid: dict, by_addr: dict, by_owner: dict, log) -> tuple[dict
                 "last_payment_date": r.get("last_payment_date"),
                 "address": r.get("location_street"),
                 "date": r.get("last_payment_date") or "",
+                "join": "exact_pid",
             })
-        if total >= 5000:
-            lead["flags"].append("delinquency_over_5k")
-        if total >= 25000:
-            lead["flags"].append("delinquency_over_25k")
-        if len({r.get("juris_code") for r in rows}) > 1:
-            lead["flags"].append("multi_juris_delinquent")
-    source_counts["delinquent_tax"] = delq_attached
-    log(f"[delinquent_tax] attached={delq_attached}  unmatched_pid={delq_unmatched}  "
-        f"filtered_under_min={delq_filtered}")
+        source_signal_counts["Tax Delinquency"] += len(rows)
+        sources_per_tag["Tax Delinquency"].add("delinquent_tax.jsonl")
+    log(f"[Tax Delinquency] attached={delq_attached}  "
+        f"unmatched_pid={delq_unmatched}  under_min={delq_filtered}")
 
-    # ---- nhc_foreclosures (HTML schedule): direct PARID join ----
-    fcl_attached = fcl_unmatched = 0
+    # ---- Tax Foreclosure (nhc_foreclosures → PID) ----
+    fcl_attached = 0
     for r in load_jsonl(FCL_HTML_PATH):
         pid = (r.get("parcel") or "").strip()
         if not pid or pid not in by_pid:
-            fcl_unmatched += 1
             continue
         lead = _get_lead(leads, pid)
-        lead["patterns"].add("tax")     # GS 105-374 is tax foreclosure → tax pattern
-        lead["patterns"].add("jfc")     # also fires jfc — court-supervised sale
-        lead["doc_types"].add("TAX_FC")
-        lead["signals"]["tax"].append({
+        attach_tag(lead, "Tax Foreclosure", {
+            "tag": "Tax Foreclosure",
             "source": "nhc_foreclosures_html",
             "doc_type": "TAX_FC",
             "case_number": r.get("case_number"),
@@ -485,323 +519,284 @@ def join_signals(by_pid: dict, by_addr: dict, by_owner: dict, log) -> tuple[dict
             "address": r.get("street_address"),
             "statute": r.get("statute"),
             "date": r.get("sale_date") or "",
+            "join": "exact_pid",
         })
-        lead["signals"]["jfc"].append({
-            "source": "nhc_foreclosures_html",
-            "doc_type": "TAX_FC",
-            "case_number": r.get("case_number"),
-            "sale_date": r.get("sale_date"),
-            "address": r.get("street_address"),
-            "date": r.get("sale_date") or "",
-        })
-        lead["flags"].append("imminent_tax_sale")
+        source_signal_counts["Tax Foreclosure"] += 1
         fcl_attached += 1
-    source_counts["nhc_foreclosures_html"] = fcl_attached
-    log(f"[nhc_foreclosures] attached={fcl_attached}  unmatched_pid={fcl_unmatched}")
+    if fcl_attached:
+        sources_per_tag["Tax Foreclosure"].add("nhc_foreclosures.jsonl")
+    log(f"[Tax Foreclosure] attached={fcl_attached}")
 
-    # ---- energov_permits: direct PID/PARID join ----
-    for path, doctype, sub_flag in [
-        (ENERGOV_DEMO_PATH, "DEMO", "demolition_permit"),
-        (ENERGOV_FLOOD_PATH, "FLOODPLAIN_DEV", "floodplain_dev_permit"),
-        (ENERGOV_OCC_PATH, "OCC_CERT", None),
-    ]:
-        attached = unmatched = 0
-        for r in load_jsonl(path):
-            pid = (r.get("PID") or r.get("pid") or "").strip()
-            if not pid or pid not in by_pid:
-                unmatched += 1
-                continue
-            lead = _get_lead(leads, pid)
-            # Demolition fires 'code' pattern; floodplain + occ are sub-flags only.
-            if doctype == "DEMO":
-                lead["patterns"].add("code")
-                lead["doc_types"].add("DEMO")
-                lead["signals"]["code"].append({
-                    "source": "nhc_energov_permits",
-                    "doc_type": "DEMO",
-                    "permit_number": r.get("PERMIT_NUMBER"),
-                    "permit_type": r.get("PERMIT_TYPE"),
-                    "work_class": r.get("WORK_CLASS"),
-                    "permit_status": r.get("PERMIT_STATUS"),
-                    "issue_date_ms": r.get("ISSUE_DATE"),
-                    "description": (r.get("DESCRIPTION") or "")[:300],
-                    "address": (r.get("STREET") or "").strip(),
-                    "valuation": r.get("VALUATION"),
-                    "date": _ms_iso(r.get("ISSUE_DATE")),
-                })
-                if sub_flag:
-                    lead["flags"].append(sub_flag)
-            elif doctype == "FLOODPLAIN_DEV":
-                # Sub-flag only; doesn't fire pattern alone.
-                lead["flags"].append(sub_flag) if sub_flag else None
-                lead["doc_types"].add("FLOODPLAIN_DEV")
-            elif doctype == "OCC_CERT":
-                lead["doc_types"].add("OCC_CERT")
-            attached += 1
-        source_counts[f"energov_{doctype.lower()}"] = attached
-        log(f"[energov:{doctype}] attached={attached}  unmatched_pid={unmatched}")
+    # ---- Demolition Order (energov_permits_demolition → PID) ----
+    demo_attached = demo_unmatched = 0
+    for r in load_jsonl(ENERGOV_DEMO_PATH):
+        permit_type_norm = norm_doc_code(r.get("PERMIT_TYPE") or "")
+        if "DEMO" not in permit_type_norm:
+            continue
+        pid = (r.get("PID") or "").strip()
+        if not pid or pid not in by_pid:
+            demo_unmatched += 1
+            continue
+        lead = _get_lead(leads, pid)
+        attach_tag(lead, "Demolition Order", {
+            "tag": "Demolition Order",
+            "source": "nhc_energov_permits",
+            "doc_type": "DEMO",
+            "permit_number": r.get("PERMIT_NUMBER"),
+            "permit_type": r.get("PERMIT_TYPE"),
+            "work_class": r.get("WORK_CLASS"),
+            "permit_status": r.get("PERMIT_STATUS"),
+            "address": (r.get("STREET") or "").strip(),
+            "date": _ms_iso(r.get("ISSUE_DATE")),
+            "join": "exact_pid",
+        })
+        source_signal_counts["Demolition Order"] += 1
+        demo_attached += 1
+    if demo_attached:
+        sources_per_tag["Demolition Order"].add("energov_permits_demolition.jsonl")
+    log(f"[Demolition Order] attached={demo_attached}  unmatched_pid={demo_unmatched}")
 
-    # ---- nhc_stormwater: direct PID join ----
-    sw_attached = sw_unmatched = 0
+    # ---- Stormwater Issue (nhc_stormwater → PID) ----
+    sw_attached = 0
     for r in load_jsonl(STORMWATER_PATH):
         pid = (r.get("PID") or "").strip()
         if not pid or pid not in by_pid:
-            sw_unmatched += 1
             continue
-        # Open / unfinaled stormwater permit is the relevant flag.
-        status = (r.get("STATUS") or "").upper()
-        is_open = "OPEN" in status or "REVIEW" in status or status == "" or "ACTIVE" in status
         lead = _get_lead(leads, pid)
-        lead["doc_types"].add("STORMWATER")
-        if is_open:
-            lead["flags"].append("stormwater_permit_open")
+        attach_tag(lead, "Stormwater Issue", {
+            "tag": "Stormwater Issue",
+            "source": "nhc_stormwater",
+            "project": r.get("PROJECT"),
+            "address": r.get("ADDRESS"),
+            "status": r.get("STATUS"),
+            "owner": r.get("OWNER"),
+            "fees": r.get("FEES"),
+            "date": _ms_iso(r.get("ISSUEDATE")),
+            "join": "exact_pid",
+        })
+        source_signal_counts["Stormwater Issue"] += 1
         sw_attached += 1
-    source_counts["nhc_stormwater"] = sw_attached
-    log(f"[stormwater] attached={sw_attached}  unmatched_pid={sw_unmatched}")
+    if sw_attached:
+        sources_per_tag["Stormwater Issue"].add("nhc_stormwater.jsonl")
+    log(f"[Stormwater Issue] attached={sw_attached}")
 
-    # ---- starnews_notice_to_creditors: decedent → owner-name join ----
-    est_attached = est_unmatched = est_skipped = 0
-    for r in load_jsonl(STARNEWS_NTC_PATH):
-        if not r.get("is_new_hanover"):
-            continue
-        decedent = r.get("decedent_name") or ""
-        norm = normalize_owner(decedent)
-        keys = decedent_match_keys(norm)
-        if not keys:
-            est_skipped += 1
-            continue
-        candidate_pids: set[str] = set()
-        for k in keys:
-            candidate_pids |= by_owner.get(k, set())
-        if not candidate_pids:
-            est_unmatched += 1
-            continue
-        for pid in candidate_pids:
-            lead = _get_lead(leads, pid)
-            lead["patterns"].add("estate")
-            lead["doc_types"].add("NTC")
-            lead["signals"]["estate"].append({
-                "source": "starnews_notice_to_creditors",
-                "doc_type": "NTC",
-                "decedent_name": decedent,
-                "case_number": r.get("case_number"),
-                "executor": r.get("executor_or_administrator"),
-                "claim_deadline": r.get("claim_deadline"),
-                "posted_date": r.get("posted_date"),
-                "detail_url": r.get("detail_url"),
-                "date": r.get("posted_date") or "",
-            })
-            est_attached += 1
-    source_counts["starnews_notice_to_creditors"] = est_attached
-    log(f"[starnews:NTC] attached={est_attached}  unmatched_owner={est_unmatched}  "
-        f"skipped_unsafe={est_skipped}")
-
-    # ---- starnews_foreclosures: address-string match (best effort) ----
-    sf_attached = sf_unmatched = 0
+    # ---- Foreclosure + Sheriff Sale (starnews_foreclosures → addr-key) ----
+    fcl_starnews_attached = sheriff_attached = sn_skipped_unrelated = 0
+    sn_skipped_addr = 0
     for r in load_jsonl(STARNEWS_FCL_PATH):
         if not r.get("is_new_hanover"):
             continue
         body = r.get("body") or ""
-        # Look for address-like patterns in the body and attempt address-key join.
-        # NHC trustee notices typically say "the property described as <addr>".
-        candidate_addrs = re.findall(
-            r"\b(\d{2,5}\s+[A-Z][A-Z .'-]+?(?:STREET|ST|AVENUE|AVE|ROAD|RD|DRIVE|DR|"
-            r"LANE|LN|COURT|CT|CIRCLE|CIR|PLACE|PL|BOULEVARD|BLVD|TRAIL|TRL|"
-            r"WAY|PARKWAY|PKWY))\b",
-            body.upper(),
-        )
-        candidate_pids: set[str] = set()
-        for addr in candidate_addrs:
-            num, name = normalize_street(addr)
-            if num and name:
-                for pid in by_addr.get((num, name), []):
-                    candidate_pids.add(pid)
-        if not candidate_pids:
-            sf_unmatched += 1
+        body_up = body.upper()
+        # Content filter — Gannett's foreclosures-sheriff-sales category
+        # cross-posts unrelated notices (NTC, CAMA permits).
+        if not any(kw in body_up for kw in FORECLOSURE_BODY_KW):
+            sn_skipped_unrelated += 1
             continue
-        for pid in candidate_pids:
-            lead = _get_lead(leads, pid)
-            lead["patterns"].add("jfc")
-            lead["doc_types"].add("FCL_NOTICE")
-            lead["signals"]["jfc"].append({
-                "source": "starnews_foreclosures",
-                "doc_type": "FCL_NOTICE",
-                "case_number": r.get("case_number"),
-                "posted_date": r.get("posted_date"),
-                "detail_url": r.get("detail_url"),
-                "body": (r.get("body") or "")[:500],
-                "date": r.get("posted_date") or "",
-            })
-            sf_attached += 1
-    source_counts["starnews_foreclosures"] = sf_attached
-    log(f"[starnews:FCL] attached={sf_attached}  unmatched_addr={sf_unmatched}")
+        # Address join — extract candidate addresses from body, attempt
+        # exact addr-key match. Only attach if exactly ONE PID matches
+        # (per spec: ambiguous = drop).
+        candidate_pids: set[str] = set()
+        for m in ADDR_FROM_BODY_RE.finditer(body_up):
+            num, name = normalize_street(m.group(0))
+            if num and name:
+                candidate_pids.update(by_addr.get((num, name), []))
+        if len(candidate_pids) != 1:
+            sn_skipped_addr += 1
+            continue
+        pid = next(iter(candidate_pids))
+        is_sheriff = "SHERIFF" in body_up or "SHERIFF" in (r.get("title") or "").upper()
 
-    # ---- ROD per-doctype: address-key + owner-key join ----
-    # ROD records carry no PID; we use the description column (which often
-    # carries subdivision + lot) plus the reverse_party (which is grantor or
-    # grantee depending on the entity's role) to attach.
-    rod_pattern_map = {
-        "foreclosure":   "jfc",
-        "estate_deed":   "estate",
-        "judgment":      "lien",
-        "lien":          "lien",
-        "quitclaim":     "transfer",
-        "deed_of_gift":  "transfer",
-        "separation":    "transfer",
-        "satisfaction":  None,  # sub-flag, no pattern fire
-        "deed":          None,  # informational baseline; no pattern fire
-        "deed_of_trust": None,
-        "assignment":    None,
-    }
-    for slug, pattern in rod_pattern_map.items():
-        path = RAW_DIR / f"rod_{slug}.jsonl"
-        attached = unmatched = skipped_entity = skipped_govt = 0
-        # Govt/agency reverse-parties that explode to thousands of city-owned
-        # or DOT-owned parcels when joined to OWN1 — never the motivated
-        # seller. Skip these.
-        govt_substr = (
-            "CITY OF ", "TOWN OF ", "COUNTY OF ", "STATE OF ",
-            "DEPARTMENT OF", "UNITED STATES", "SECRETARY OF",
-            "INTERNAL REVENUE", "U.S. ", "USA",
-            "NORTH CAROLINA", "BOARD OF EDUC",
-            "WILMINGTON HOUSING",
-        )
-        for r in load_jsonl(path):
-            party = r.get("reverse_party") or ""
-            party_up = party.upper()
-            # Skip governmental plaintiffs — they own thousands of parcels.
-            if any(g in party_up for g in govt_substr):
-                skipped_govt += 1
-                continue
-            # Skip corporate / entity reverse-parties (banks, lenders, HOAs).
-            # Their OWN1 matches would explode to all entity-owned parcels.
-            if is_entity_owner(party):
-                skipped_entity += 1
-                continue
-            party_norm = normalize_owner(party)
-            candidate_pids: set[str] = set()
-            for k in owner_keys(party_norm):
-                if len(k) >= 4:
-                    candidate_pids |= by_owner.get(k, set())
-            if not candidate_pids:
-                unmatched += 1
-                continue
-            for pid in candidate_pids:
-                lead = _get_lead(leads, pid)
-                doc_label = (r.get("doc_type_label") or "").upper().strip() or slug.upper()
-                lead["doc_types"].add(doc_label)
-                if pattern:
-                    lead["patterns"].add(pattern)
-                    lead["signals"][pattern].append({
-                        "source": "nhc_rod",
-                        "doc_type": doc_label,
-                        "instrument_number": r.get("instrument_number"),
-                        "recorded_date": r.get("recorded_date"),
-                        "book_code": r.get("book_code"),
-                        "book_number": r.get("book_number"),
-                        "page_number": r.get("page_number"),
-                        "description": r.get("description"),
-                        "reverse_party": party,
-                        "detail_url": r.get("detail_url"),
-                        "date": r.get("recorded_date") or "",
-                    })
-                else:
-                    if slug == "satisfaction":
-                        lead["flags"].append("rod_satisfaction_filed")
-                attached += 1
-        source_counts[f"rod_{slug}"] = attached
-        log(f"[rod:{slug:14s}] attached={attached:>5}  unmatched={unmatched:>5}  "
-            f"skip_entity={skipped_entity:>4}  skip_govt={skipped_govt:>4}")
+        lead = _get_lead(leads, pid)
+        sig_payload = {
+            "source": "starnews_foreclosures",
+            "case_number": r.get("case_number"),
+            "posted_date": r.get("posted_date"),
+            "detail_url": r.get("detail_url"),
+            "body": body[:400],
+            "date": r.get("posted_date") or "",
+            "join": "addr_exact",
+        }
+        attach_tag(lead, "Foreclosure", {**sig_payload, "tag": "Foreclosure"})
+        source_signal_counts["Foreclosure"] += 1
+        sources_per_tag["Foreclosure"].add("starnews_foreclosures.jsonl")
+        fcl_starnews_attached += 1
+        if is_sheriff:
+            attach_tag(lead, "Sheriff Sale", {**sig_payload, "tag": "Sheriff Sale"})
+            source_signal_counts["Sheriff Sale"] += 1
+            sources_per_tag["Sheriff Sale"].add("starnews_foreclosures.jsonl")
+            sheriff_attached += 1
+    log(f"[Foreclosure/Sheriff] starnews fcl={fcl_starnews_attached}  "
+        f"sheriff={sheriff_attached}  skipped_unrelated={sn_skipped_unrelated}  "
+        f"skipped_addr_ambiguous={sn_skipped_addr}")
 
-    # ---- transfer rule (PropertyOwners-derived): nominal sale or post-estate sale ----
-    transfer_rule_counts = {"quitclaim_rod": 0, "estate_deed_rod": 0,
-                            "nominal_sale": 0, "post_estate_sale": 0,
-                            "deed_of_gift_rod": 0, "separation_rod": 0}
-    # Tally pre-existing transfer signals from ROD into the rule counter.
+    # ---- Foreclosure (rod_foreclosure → ROD has no PID/address) ----
+    # NHC Register of Deeds records carry no parcel ID and the description
+    # field is subdivision+lot+block, not a street address. Per join safety
+    # rules (name-alone is never enough), ROD signals are NOT attached
+    # unless a stronger join is available. We log the row count and SKIP.
+    rod_foreclosure_rows = load_jsonl(ROD_FORECLOSURE_PATH)
+    if rod_foreclosure_rows:
+        log(f"[rod_foreclosure] {len(rod_foreclosure_rows)} rows -- "
+            f"NOT attached (no PID/address join available, owner-name alone "
+            f"insufficient per join safety rules)")
+
+    # ---- Estate / Probate ----
+    # Sources:
+    #   1. starnews_notice_to_creditors — decedent name match → owner-name
+    #      alone, FAILS join safety. SKIP.
+    #   2. rod_estate_deed — has TRUSTEES DEED rows (foreclosure post-sale,
+    #      not probate) plus actual ADMIN/EXEC/EXTRX deeds. Even the real
+    #      probate ones are name-alone. SKIP.
+    ntc_rows = load_jsonl(STARNEWS_NTC_PATH)
+    nhc_only = [r for r in ntc_rows if r.get("is_new_hanover")]
+    if nhc_only:
+        log(f"[Estate/Probate:NTC] {len(nhc_only)} NHC notice-to-creditors "
+            f"rows -- NOT attached (decedent -> owner-name match alone, "
+            f"insufficient per join safety rules)")
+    rod_estate = load_jsonl(ROD_ESTATE_DEED_PATH)
+    real_probate = sum(
+        1 for r in rod_estate
+        if norm_doc_code(r.get("doc_type_label") or "") in ESTATE_DEED_CODES
+    )
+    log(f"[Estate/Probate:ROD] {len(rod_estate)} rows total, "
+        f"{real_probate} actual probate deeds (rest are TRUSTEES DEED "
+        f"foreclosure-context) -- NOT attached (no PID/address join)")
+
+    # ---- Mechanics Lien / Lis Pendens / Judgment / Quitclaim ----
+    rod_lien = load_jsonl(ROD_LIEN_PATH)
+    rod_judgment = load_jsonl(ROD_JUDGMENT_PATH)
+    rod_quitclaim = load_jsonl(ROD_QUITCLAIM_PATH)
+    log(f"[Mechanics Lien/Lis Pendens] rod_lien.jsonl: {len(rod_lien)} rows "
+        f"-- NOT attached (no PID/address join)")
+    log(f"[Judgment] rod_judgment.jsonl: {len(rod_judgment)} rows "
+        f"-- NOT attached (governmental reverse-party + name-alone)")
+    log(f"[Quitclaim] rod_quitclaim.jsonl: {len(rod_quitclaim)} rows "
+        f"-- NOT attached (no file or no PID/address join)")
+
+    # ---- Owner-profile tags ----
+    # Computed per parcel from PropertyOwners. Only emitted on parcels
+    # already in `leads` (i.e. that have at least one distress signal),
+    # since we don't surface non-distress parcels.
+    abs_count = oos_count = lto_count = sr_count = 0
     for pid, lead in leads.items():
-        for s in lead["signals"].get("transfer", []):
-            src = s.get("source") or ""
-            doc = (s.get("doc_type") or "").upper()
-            if src == "nhc_rod":
-                if "QCD" in doc or "QUITCLAIM" in doc:
-                    transfer_rule_counts["quitclaim_rod"] += 1
-                elif "GIFT" in doc:
-                    transfer_rule_counts["deed_of_gift_rod"] += 1
-                elif "SEP" in doc:
-                    transfer_rule_counts["separation_rod"] += 1
-        for s in lead["signals"].get("estate", []):
-            if (s.get("doc_type") or "").upper() in {"ADMIN DEED", "EXEC DEED",
-                                                       "EXTRX DEED", "COMMR DEED"}:
-                transfer_rule_counts["estate_deed_rod"] += 1
-                break
+        parcel = by_pid.get(pid)
+        if not parcel:
+            continue
+        # Absentee Owner — both addresses normalized + comparable
+        site_num, site_name = normalize_street(parcel.get("site_address") or "")
+        mail_num, mail_name = normalize_street(parcel.get("mail_address") or "")
+        site_city_norm = (parcel.get("site_city") or "").upper().strip()
+        mail_city_norm = (parcel.get("mail_city") or "").upper().strip()
+        if site_num and site_name and mail_num and mail_name:
+            site_line = f"{site_num} {site_name} {site_city_norm}".strip()
+            mail_line = f"{mail_num} {mail_name} {mail_city_norm}".strip()
+            if site_line != mail_line:
+                attach_tag(lead, "Absentee Owner", {
+                    "tag": "Absentee Owner",
+                    "site_addr": parcel.get("site_address"),
+                    "site_city": parcel.get("site_city"),
+                    "mail_addr": parcel.get("mail_address"),
+                    "mail_city": parcel.get("mail_city"),
+                    "mail_state": parcel.get("mail_state"),
+                    "join": "self",
+                })
+                source_signal_counts["Absentee Owner"] += 1
+                sources_per_tag["Absentee Owner"].add("property_owners_layer0.jsonl")
+                abs_count += 1
+        # Out-of-State Owner — valid 2-letter state and != NC
+        ms = (parcel.get("mail_state") or "").upper().strip()
+        if ms in US_STATES and ms != "NC":
+            attach_tag(lead, "Out-of-State Owner", {
+                "tag": "Out-of-State Owner",
+                "mail_state": ms,
+                "mail_city": parcel.get("mail_city"),
+                "join": "self",
+            })
+            source_signal_counts["Out-of-State Owner"] += 1
+            sources_per_tag["Out-of-State Owner"].add("property_owners_layer0.jsonl")
+            oos_count += 1
+        # Long-Term Ownership — years_owned >= 20 derived from sale_date
+        sale_iso = parcel.get("sale_date_iso") or ""
+        sale_dt = _parse_iso_or_date(sale_iso) if sale_iso else None
+        if sale_dt:
+            years = (datetime.now(timezone.utc) - sale_dt).days / 365.25
+            if years >= LONG_TERM_OWNERSHIP_YRS:
+                attach_tag(lead, "Long-Term Ownership", {
+                    "tag": "Long-Term Ownership",
+                    "sale_date": sale_iso,
+                    "years_owned": round(years, 1),
+                    "join": "self",
+                })
+                source_signal_counts["Long-Term Ownership"] += 1
+                sources_per_tag["Long-Term Ownership"].add("property_owners_layer0.jsonl")
+                lto_count += 1
+        # Senior Owner — globally suppressed (no field coverage)
+        if senior_enabled:
+            # Only enable if evaluate_senior_coverage returned True
+            pass  # would emit here based on parcel field; suppressed by default
+    log(f"[owner-tags] absentee={abs_count} out_of_state={oos_count} "
+        f"long_term={lto_count} senior={sr_count}")
 
-    pol_transfer = 0
+    # Free & Clear suppressed: requires rod_deed_of_trust.jsonl which is
+    # not present in the repo. Per spec: don't infer payoff status from
+    # absent data.
+    if not ROD_DOT_PATH.exists():
+        log("[Free & Clear] rod_deed_of_trust.jsonl absent -- tag SUPPRESSED")
+
+    # ---- Derived: Distressed Transfer + Post-Estate Sale ----
+    distressed_xfer = post_estate = 0
     now = datetime.now(timezone.utc)
-    for pid, lead in list(leads.items()):
+    for pid, lead in leads.items():
         parcel = by_pid.get(pid)
         if not parcel:
             continue
         sale_iso = parcel.get("sale_date_iso") or ""
-        sale_dt = None
-        if sale_iso:
-            try:
-                sale_dt = datetime.fromisoformat(sale_iso)
-            except ValueError:
-                sale_dt = None
+        sale_dt = _parse_iso_or_date(sale_iso) if sale_iso else None
         sp = parcel.get("sale_price")
         tv = parcel.get("apr_total")
-        recent = bool(sale_dt) and (now - sale_dt).days <= 730
+        if sale_dt and sp is not None:
+            recent = (now - sale_dt).days <= DISTRESSED_TRANSFER_DAYS
+            if recent and (
+                (sp < 1000) or (tv and tv > 0 and (sp / tv) < 0.05)
+            ):
+                attach_tag(lead, "Distressed Transfer", {
+                    "tag": "Distressed Transfer",
+                    "sale_date": sale_iso,
+                    "sale_price": sp,
+                    "total_market_value": tv,
+                    "join": "self",
+                })
+                source_signal_counts["Distressed Transfer"] += 1
+                sources_per_tag["Distressed Transfer"].add("property_owners_layer0.jsonl")
+                distressed_xfer += 1
 
-        nominal = False
-        if recent and sp is not None:
-            if sp < 1000 or (tv and tv > 0 and sp / tv < 0.05):
-                nominal = True
-        if nominal:
-            lead["patterns"].add("transfer")
-            lead["flags"].append("nominal_consideration_recent_sale")
-            lead["signals"]["transfer"].append({
-                "source": "property_owners_sale",
-                "doc_type": "NOMINAL_SALE",
-                "sale_date": sale_iso,
-                "sale_price": sp,
-                "apr_total": tv,
-                "date": sale_iso,
-            })
-            transfer_rule_counts["nominal_sale"] += 1
-            pol_transfer += 1
-            continue
-
-        # Estate-then-sale: estate notice posted before a sale within 18 mo.
-        estate_signals = lead["signals"].get("estate") or []
-        if sale_dt and estate_signals:
+        # Post-Estate Sale requires the Estate / Probate tag to be present.
+        # Since Estate / Probate is not attached anywhere in this build
+        # (per join safety), Post-Estate Sale will not fire.
+        if "Estate / Probate" in lead["tags"] and sale_dt:
+            estate_signals = lead["signals"].get("Estate / Probate") or []
+            earliest_estate = None
             for s in estate_signals:
-                est_str = s.get("posted_date") or ""
-                est_dt = None
-                for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%B %d, %Y"):
-                    try:
-                        est_dt = datetime.strptime(est_str, fmt).replace(tzinfo=timezone.utc)
-                        break
-                    except ValueError:
-                        continue
-                if not est_dt:
-                    continue
-                delta = (sale_dt - est_dt).days
-                if 0 <= delta <= 548:
-                    lead["patterns"].add("transfer")
-                    lead["flags"].append("post_estate_recent_sale")
-                    lead["signals"]["transfer"].append({
-                        "source": "property_owners_sale",
-                        "doc_type": "POST_ESTATE_SALE",
+                est_str = s.get("posted_date") or s.get("recorded_date") or ""
+                est_dt = _parse_iso_or_date(est_str) if est_str else None
+                if est_dt and (earliest_estate is None or est_dt < earliest_estate):
+                    earliest_estate = est_dt
+            if earliest_estate:
+                delta = (sale_dt - earliest_estate).days
+                if 0 <= delta <= POST_ESTATE_DAYS:
+                    attach_tag(lead, "Post-Estate Sale", {
+                        "tag": "Post-Estate Sale",
                         "sale_date": sale_iso,
-                        "estate_posted": est_str,
-                        "date": sale_iso,
+                        "earliest_estate": earliest_estate.isoformat(),
+                        "join": "derived",
                     })
-                    transfer_rule_counts["post_estate_sale"] += 1
-                    pol_transfer += 1
-                    break
-    log(f"[transfer:property_owners] fired={pol_transfer}")
+                    source_signal_counts["Post-Estate Sale"] += 1
+                    sources_per_tag["Post-Estate Sale"].add("derived")
+                    post_estate += 1
+    log(f"[derived] distressed_transfer={distressed_xfer} post_estate={post_estate}")
 
-    return leads, dict(source_counts), transfer_rule_counts
+    return leads, dict(source_signal_counts), dict(sources_per_tag)
 
 
 def _ms_iso(v) -> str:
@@ -809,179 +804,157 @@ def _ms_iso(v) -> str:
     return dt.isoformat() if dt else ""
 
 
-# ----------------------------------------------------------------------
-# Lead-record assembly + scoring
-# ----------------------------------------------------------------------
+# ---------- Tier + scoring ----------
 
-def score_lead(lead: dict, parcel: dict) -> dict:
-    patterns = sorted(lead["patterns"])
-    stack_count = len(patterns)
-    if stack_count >= 3:
-        tier = TIER_HOT
-    elif stack_count == 2:
-        tier = TIER_WARM
-    else:
-        tier = TIER_ACTIVE
-
-    score = 0
-    if "jfc" in patterns: score += 25
-    if "tax" in patterns: score += 20
-    if "estate" in patterns: score += 20
-    if "code" in patterns: score += 12
-    if "lien" in patterns: score += 12
-    if "transfer" in patterns: score += 10
-
-    flags = list(lead["flags"])
-    if parcel.get("absentee"):
-        flags.append("absentee_owner")
-        score += 5
-    apr_total = parcel.get("apr_total") or 0
-    if apr_total >= 500_000:
-        flags.append("value_over_500k")
-        score += 4
-    if "demolition_permit" in flags:
-        score += 8
-
-    return {
-        "patterns": patterns,
-        "stack_count": stack_count,
-        "tier": tier,
-        "raw_score": score,
-        "flags": sorted(set(flags)),
-    }
-
-
-def compute_derived(parcel: dict, lead: dict) -> dict:
-    today = datetime.now(timezone.utc)
-    sale_iso = parcel.get("sale_date_iso") or ""
-    sale_dt = None
-    if sale_iso:
-        try:
-            sale_dt = datetime.fromisoformat(sale_iso)
-        except ValueError:
-            sale_dt = None
-    sp = parcel.get("sale_price")
-    tv = parcel.get("apr_total")
-
-    out: dict = {}
-    if sp is not None and tv and tv > 0 and sp > 0:
-        out["estimated_equity_pct"] = round(max(0.0, min(100.0, (1.0 - sp / tv) * 100.0)), 1)
-    else:
-        out["estimated_equity_pct"] = None
-    if sale_dt:
-        out["years_owned"] = round((today - sale_dt).days / 365.25, 1)
-    else:
-        out["years_owned"] = None
-    out["is_absentee"] = bool(parcel.get("absentee"))
-    own = parcel.get("own1") or ""
-    out["is_entity"] = is_entity_owner(own)
-    if out["is_absentee"] and not out["is_entity"]:
-        out["is_likely_landlord"] = True
-    elif is_landlord_entity(own):
-        out["is_likely_landlord"] = True
-    else:
-        out["is_likely_landlord"] = False
-    out["is_homestead"] = False  # NHC PropertyOwners doesn't expose exemptions
-    out["is_senior"] = False
-    out["is_disabled_veteran"] = False
-    out["is_disabled"] = False
-    out["is_likely_inherited"] = False  # need year_built — not in source feed
-
-    distress = (
-        len(lead.get("patterns", set())) * 10
-        + min(20, len(lead.get("flags", [])))
-        + (5 if out["is_absentee"] else 0)
-    )
-    out["distress_score"] = distress
-    return out
-
-
-def _trim_signals(signals: dict) -> dict:
-    out = {}
-    for k, lst in signals.items():
-        if not lst:
-            continue
-        ordered = sorted(lst, key=lambda s: str(s.get("date") or ""), reverse=True)
-        out[k] = ordered[:SIGNAL_CAP_PER_PATTERN]
-    return out
+def assign_tier(tags: list[str]) -> str:
+    distress_count = sum(1 for t in tags if t in DISTRESS_TAGS)
+    if distress_count >= 3:
+        return TIER_HOT
+    if distress_count == 2:
+        return TIER_WARM
+    if distress_count == 1:
+        return TIER_ACTIVE
+    return ""  # zero distress → drop
 
 
 def build_lead_record(pid: str, parcel: dict, lead: dict) -> dict:
-    s = score_lead(lead, parcel)
-    derived = compute_derived(parcel, lead)
+    tags = sorted(lead["tags"])
+    distress_tags = [t for t in tags if t in DISTRESS_TAGS]
+    tier = assign_tier(tags)
     parsed_owner = parse_owner_name(parcel.get("own1", ""))
-    pin = parcel.get("mapidkey") or ""
+    sale_iso = parcel.get("sale_date_iso") or ""
+    sale_dt = _parse_iso_or_date(sale_iso) if sale_iso else None
+    years_owned = None
+    if sale_dt:
+        years_owned = round((datetime.now(timezone.utc) - sale_dt).days / 365.25, 1)
     etax_url = (
         f"https://etax.nhcgov.com/pt/Datalets/Datalet.aspx?UseSearch=no"
         f"&pin={pid}&jur=NH&taxyr=2025"
     )
     return {
         "pid": pid,
-        "mapid": parcel.get("mapid") or "",
-        "mapidkey": pin,
-        "etax_url": etax_url,
+        "tier": tier,
+        "tags": tags,
+        "distress_tag_count": len(distress_tags),
+        "_diff_status": "existing",  # filled in later
+        "owner_name": parcel.get("own1") or "",
+        "owner_parsed": parsed_owner,
+        "is_entity": parsed_owner.get("is_entity", False),
         "address": parcel.get("site_address") or "",
         "city": parcel.get("site_city") or "",
-        "owner": parcel.get("own1") or "",
-        "owner_parsed": parsed_owner,
-        "is_entity": derived["is_entity"],
-        "mail_address": parcel.get("mail_address") or "",
-        "mail_city": parcel.get("mail_city") or "",
-        "mail_state": parcel.get("mail_state") or "",
-        "mail_zip": parcel.get("mail_zip") or "",
-        "subdiv": parcel.get("subdiv") or "",
-        "legal1": parcel.get("legal1") or "",
         "muni": parcel.get("muni") or "",
         "zoning": parcel.get("zoning") or "",
         "land_use_code": parcel.get("land_use_code") or "",
         "class_code": parcel.get("class_code") or "",
+        "subdiv": parcel.get("subdiv") or "",
+        "legal1": parcel.get("legal1") or "",
+        "mail_address": parcel.get("mail_address") or "",
+        "mail_city": parcel.get("mail_city") or "",
+        "mail_state": parcel.get("mail_state") or "",
+        "mail_zip": parcel.get("mail_zip") or "",
         "sfla": parcel.get("sfla"),
+        "total_market_value": parcel.get("apr_total"),
         "apr_total": parcel.get("apr_total"),
         "apr_land": parcel.get("apr_land"),
         "apr_bldg": parcel.get("apr_bldg"),
         "apr_taxyr": parcel.get("apr_taxyr"),
-        "sale_date_iso": parcel.get("sale_date_iso") or "",
+        "sale_date": sale_iso,
         "sale_price": parcel.get("sale_price"),
-        "sale_instrument": parcel.get("sale_instrument") or "",
         "sale_book": parcel.get("sale_book") or "",
         "sale_page": parcel.get("sale_page") or "",
-        "estimated_equity_pct": derived["estimated_equity_pct"],
-        "years_owned": derived["years_owned"],
-        "is_absentee": derived["is_absentee"],
-        "is_likely_landlord": derived["is_likely_landlord"],
-        "is_homestead": derived["is_homestead"],
-        "is_senior": derived["is_senior"],
-        "distress_score": derived["distress_score"],
-        "patterns": s["patterns"],
-        "stack_count": s["stack_count"],
-        "tier": s["tier"],
-        "raw_score": s["raw_score"],
-        "flags": s["flags"],
-        "doc_types": sorted(lead.get("doc_types") or set()),
-        "signals": _trim_signals(lead["signals"]),
-        # legacy alias
-        "absentee": derived["is_absentee"],
+        "sale_instrument": parcel.get("sale_instrument") or "",
+        "years_owned": years_owned,
+        "mapidkey": parcel.get("mapidkey") or "",
+        "mapid": parcel.get("mapid") or "",
+        "etax_url": etax_url,
+        "signals": lead["signals"],
+        "last_update": "",  # pipeline doesn't track per-lead update timestamps yet
     }
 
 
-def two_truths_check(records: list[dict], header_tier: dict, header_pattern: dict) -> None:
-    derived_tier = Counter(r["tier"] for r in records)
-    derived_pattern: Counter = Counter()
+# ---------- Diff ----------
+
+def is_old_or_missing_schema(prev_payload) -> bool:
+    """Return True if the previous file is absent, malformed, or uses the
+    pre-tag-taxonomy schema (records carrying ``patterns`` instead of
+    ``tags``).
+    """
+    if not prev_payload:
+        return True
+    records = None
+    if isinstance(prev_payload, dict):
+        records = prev_payload.get("records")
+        # New-schema header lives under ``header``; old-schema fields are
+        # spread at top level. Either way, records[] is what matters.
+    if not isinstance(records, list):
+        return True
+    if not records:
+        return False  # empty record set is valid; baseline of 0 → 0
+    sample = records[0]
+    return "tags" not in sample
+
+
+def compute_diff(records: list[dict], prev_records: list[dict] | None,
+                 baseline: bool, log) -> tuple[int, int, int]:
+    if baseline:
+        for r in records:
+            r["_diff_status"] = "existing"
+        log(f"[diff] baseline established — {len(records)} records → 'existing'")
+        return 0, 0, len(records)
+
+    prev_by_pid: dict[str, dict] = {r["pid"]: r for r in (prev_records or [])
+                                    if r.get("pid")}
+    new_count = newly_tagged = existing = 0
     for r in records:
-        for p in r["patterns"]:
-            derived_pattern[p] += 1
+        pid = r["pid"]
+        prev = prev_by_pid.get(pid)
+        if prev is None:
+            r["_diff_status"] = "new"
+            new_count += 1
+        else:
+            prev_tags = sorted(prev.get("tags", []))
+            cur_tags = sorted(r.get("tags", []))
+            if prev_tags != cur_tags:
+                r["_diff_status"] = "newly_tagged"
+                newly_tagged += 1
+            else:
+                r["_diff_status"] = "existing"
+                existing += 1
+    log(f"[diff] new={new_count}  newly_tagged={newly_tagged}  existing={existing}")
+    return new_count, newly_tagged, existing
+
+
+# ---------- Output ----------
+
+def two_truths_check(records: list[dict], header: dict) -> None:
+    derived_tier: Counter = Counter()
+    derived_tag: Counter = Counter()
+    for r in records:
+        derived_tier[r["tier"]] += 1
+        for t in r["tags"]:
+            derived_tag[t] += 1
     for k in (TIER_HOT, TIER_WARM, TIER_ACTIVE):
-        if header_tier.get(k, 0) != derived_tier.get(k, 0):
+        if header["tier_counts"].get(k, 0) != derived_tier.get(k, 0):
             raise RuntimeError(
-                f"Two-Truths violation: header tier_counts[{k}]={header_tier.get(k,0)} "
-                f"!= records-derived {derived_tier.get(k,0)}"
+                f"Two-Truths violation: header.tier_counts[{k}]="
+                f"{header['tier_counts'].get(k, 0)} != records-derived "
+                f"{derived_tier.get(k, 0)}"
             )
-    for p in PATTERNS:
-        if header_pattern.get(p, 0) != derived_pattern.get(p, 0):
+    for t in header["tag_counts"]:
+        if header["tag_counts"][t] != derived_tag.get(t, 0):
             raise RuntimeError(
-                f"Two-Truths violation: header pattern_counts[{p}]={header_pattern.get(p,0)} "
-                f"!= records-derived {derived_pattern.get(p,0)}"
+                f"Two-Truths violation: header.tag_counts[{t}]="
+                f"{header['tag_counts'][t]} != records-derived "
+                f"{derived_tag.get(t, 0)}"
             )
+    n = len(records)
+    sumdiff = (header["new_count"] + header["newly_tagged_count"]
+               + header["existing_count"])
+    if sumdiff != n:
+        raise RuntimeError(
+            f"Diff invariant violation: new+newly_tagged+existing={sumdiff} "
+            f"!= total_records={n}"
+        )
 
 
 def _git_short_sha() -> str:
@@ -997,117 +970,219 @@ def _git_short_sha() -> str:
     return ""
 
 
-def write_output(leads: dict, by_pid: dict, source_counts: dict,
-                 transfer_rule_counts: dict, log) -> dict:
-    records = []
-    for pid, lead in leads.items():
-        if not lead["patterns"]:
+def write_tag_audit(records: list[dict], source_signal_counts: dict,
+                     sources_per_tag: dict, suppressed: list[str],
+                     total_records: int) -> None:
+    import random
+    by_tag: dict[str, list[str]] = defaultdict(list)
+    for r in records:
+        for t in r["tags"]:
+            by_tag[t].append(r["pid"])
+    audit = {"total_records": total_records, "tags": []}
+    for tag in ALL_TAGS:
+        leads_with = by_tag.get(tag, [])
+        if not leads_with and tag not in suppressed:
+            audit["tags"].append({
+                "tag": tag, "lead_count": 0, "samples": [],
+                "source_signal_count": source_signal_counts.get(tag, 0),
+                "source_files": sorted(sources_per_tag.get(tag, [])),
+                "status": "zero_count_dropped_from_render",
+            })
             continue
+        if tag in suppressed:
+            audit["tags"].append({
+                "tag": tag, "lead_count": 0, "samples": [],
+                "source_signal_count": 0,
+                "source_files": [],
+                "status": "globally_suppressed",
+            })
+            continue
+        n = len(leads_with)
+        samples = random.sample(leads_with, min(5, n)) if n else []
+        warn = (n / total_records) > 0.5 if total_records else False
+        audit["tags"].append({
+            "tag": tag, "lead_count": n, "samples": samples,
+            "source_signal_count": source_signal_counts.get(tag, 0),
+            "source_files": sorted(sources_per_tag.get(tag, [])),
+            "warning": "fires on >50% of leads" if warn else None,
+            "status": "active",
+        })
+    TAG_AUDIT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    TAG_AUDIT_PATH.write_text(json.dumps(audit, indent=2, default=str),
+                               encoding="utf-8")
+
+
+def write_output(leads: dict, by_pid: dict, source_signal_counts: dict,
+                 sources_per_tag: dict, suppressed: list[str], log) -> dict:
+    # Build records — only those with at least one distress tag.
+    records: list[dict] = []
+    for pid, lead in leads.items():
         parcel = by_pid.get(pid, {})
         if not parcel:
             continue
-        records.append(build_lead_record(pid, parcel, lead))
+        tier = assign_tier(lead["tags"])
+        if not tier:
+            continue
+        rec = build_lead_record(pid, parcel, lead)
+        records.append(rec)
 
+    # Sort: tier rank desc, then distress tag count desc, then market value desc
     tier_rank = {TIER_HOT: 3, TIER_WARM: 2, TIER_ACTIVE: 1}
-    records.sort(key=lambda r: (tier_rank[r["tier"]], r["stack_count"], r["raw_score"]),
-                 reverse=True)
+    records.sort(
+        key=lambda r: (
+            tier_rank.get(r["tier"], 0),
+            r["distress_tag_count"],
+            (r.get("apr_total") or 0),
+        ),
+        reverse=True,
+    )
 
+    # Diff against leads.previous.json
+    prev_payload = None
+    if PREV_PATH.exists():
+        try:
+            prev_payload = json.loads(PREV_PATH.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            prev_payload = None
+    baseline = is_old_or_missing_schema(prev_payload)
+
+    if baseline:
+        # Archive old previous if it has the old schema
+        if PREV_PATH.exists():
+            ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            shutil.copy(PREV_PATH, ARCHIVE_DIR / f"leads.previous.{ts}.json")
+            log(f"[archive] old leads.previous.json archived under data/raw/archive/")
+        log("Diff baseline established.")
+        prev_records = None
+    else:
+        prev_records = (prev_payload.get("records") if isinstance(prev_payload, dict) else None) or []
+        log(f"[diff] previous file has {len(prev_records)} new-schema records")
+
+    new_count, newly_tagged_count, existing_count = compute_diff(
+        records, prev_records, baseline, log
+    )
+
+    # Two-Truths header
     tier_counts = Counter(r["tier"] for r in records)
-    pattern_counts: Counter = Counter()
-    doc_type_counts: Counter = Counter()
+    tag_counts: Counter = Counter()
+    for r in records:
+        for t in r["tags"]:
+            tag_counts[t] += 1
+    # Drop zero-count tags from header (per spec, zero-count tags are not rendered)
+    tag_counts = {t: n for t, n in tag_counts.items() if n > 0}
+
+    distress_attach_rates = {
+        t: round(tag_counts.get(t, 0) * 100.0 / len(records), 2)
+        for t in DISTRESS_TAGS if tag_counts.get(t, 0) > 0
+    } if records else {}
+
+    # Top combos — distinct distress-tag combinations only
     combo_counts: Counter = Counter()
     for r in records:
-        for p in r["patterns"]:
-            pattern_counts[p] += 1
-        for d in r["doc_types"]:
-            doc_type_counts[d] += 1
-        if r["stack_count"] >= 2:
-            combo = tuple(sorted(r["patterns"]))
-            combo_counts[combo] += 1
+        distress = tuple(sorted(t for t in r["tags"] if t in DISTRESS_TAGS))
+        if distress:
+            combo_counts[distress] += 1
 
-    # warm tier high-confidence: warm + at least one of (demolition,
-    # absentee, multi-juris delinquency)
-    high_conf_warm = sum(
-        1 for r in records
-        if r["tier"] == TIER_WARM and (
-            "demolition_permit" in r["flags"]
-            or r.get("is_absentee")
-            or "multi_juris_delinquent" in r["flags"]
-            or "imminent_tax_sale" in r["flags"]
-        )
-    )
-    warm_total = tier_counts.get(TIER_WARM, 0)
-    high_conf_pct = round(high_conf_warm * 100.0 / warm_total, 1) if warm_total else 0.0
-
-    payload = {
+    header = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source_commit": _git_short_sha(),
         "county": "New Hanover",
         "state": "NC",
-        "total": len(records),
+        "total_records": len(records),
         "tier_counts": dict(tier_counts),
-        "pattern_counts": dict(pattern_counts),
-        "source_attach_counts": source_counts,
-        "doc_type_counts": dict(doc_type_counts),
-        "transfer_rule_counts": transfer_rule_counts,
-        "warm_tier_high_confidence_pct": high_conf_pct,
-        "top_pattern_combos": [[list(c), n] for c, n in combo_counts.most_common(10)],
-        "patterns_legend": {
-            "jfc": "Judicial Foreclosure (Power of Sale + ROD foreclosure deeds)",
-            "tax": "Tax distress (delinquent CSV + GS 105-374 schedule)",
-            "estate": "Probate / Estate (StarNews NTC + ROD estate deeds)",
-            "code": "Code / Demolition (EnerGov demolition permits — NH gap doc'd)",
-            "lien": "Recorded Lien / Civil Judgment (ROD JDGMT + LIEN + LIS PENS)",
-            "transfer": "Distressed Conveyance (QCD + nominal sale + post-estate)",
-        },
+        "tag_counts": tag_counts,
+        "new_count": new_count,
+        "newly_tagged_count": newly_tagged_count,
+        "existing_count": existing_count,
+        "distress_tag_attach_rates": distress_attach_rates,
+        "top_tag_combos": [[list(c), n] for c, n in combo_counts.most_common(20)],
+        "suppressed_tags": suppressed,
         "tier_rules": {
-            "hot": "stack_count >= 3",
-            "warm": "stack_count == 2",
-            "active": "stack_count == 1",
+            "hot": "≥3 distress tags",
+            "warm": "2 distress tags",
+            "active": "1 distress tag",
+            "dropped": "0 distress tags",
         },
-        "records": records,
+        "tag_categories": {
+            "distress": DISTRESS_TAGS,
+            "owner": OWNER_TAGS,
+            "derived": DERIVED_TAGS,
+        },
     }
 
-    # Two-Truths invariant
-    two_truths_check(records, payload["tier_counts"], payload["pattern_counts"])
+    # Two-Truths invariant — recompute and verify
+    two_truths_check(records, header)
 
-    # Rotate previous → leads.previous.json
-    if OUT_PATH.exists():
-        OUT_PATH.replace(PREV_PATH)
+    # Tag audit (separate file, gitignored)
+    write_tag_audit(records, source_signal_counts, sources_per_tag,
+                    suppressed, len(records))
+
+    # Write the new leads.json. Then snapshot it to leads.previous.json so
+    # tomorrow's run can diff. This means PREV always holds the most recent
+    # successful snapshot; after a baseline reset, today's data becomes
+    # tomorrow's "previous" baseline so the next run does a real diff.
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"header": header, "records": records}
     OUT_PATH.write_text(json.dumps(payload, default=str), encoding="utf-8")
+    shutil.copy(OUT_PATH, PREV_PATH)
     size_mb = OUT_PATH.stat().st_size / 1024 / 1024
-    log(f"\n[output] wrote {len(records):,} leads to {OUT_PATH} ({size_mb:.2f} MB)")
-    log(f"[output] tier_counts:    {dict(tier_counts)}")
-    log(f"[output] pattern_counts: {dict(pattern_counts)}")
-    log(f"[output] high_conf_warm: {high_conf_warm} / {warm_total} ({high_conf_pct}%)")
-    log(f"[output] top combos:     {payload['top_pattern_combos'][:3]}")
+    log(f"\n[output] wrote {len(records):,} records to {OUT_PATH} ({size_mb:.2f} MB)")
+    log(f"[output] tier_counts: {dict(tier_counts)}")
+    log(f"[output] tag_counts:  {tag_counts}")
+    log(f"[output] diff: new={new_count} newly_tagged={newly_tagged_count} existing={existing_count}")
+    log(f"[output] top combos (distress only): "
+        f"{[(c, n) for c, n in combo_counts.most_common(5)]}")
     if size_mb > 50:
         log(f"[!] WARNING: leads.json exceeds 50MB GitHub cap")
     return payload
 
 
+# ---------- Main ----------
+
 def main() -> int:
+    # Force UTF-8 stdout/stderr so unicode log strings (em dashes, arrows)
+    # don't hit Windows cp1252 charmap errors. Python 3.7+ supports this.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true",
-                    help="Skip writing leads.json; print the summary only.")
+                    help="Run join + tag emission, print summary, skip write.")
     args = ap.parse_args()
 
     def log(msg: str) -> None:
         print(msg, flush=True)
 
-    by_pid, by_addr, by_owner = load_parcel_master(PARCEL_PATH, log)
+    by_pid, by_addr = load_parcel_master(PARCEL_PATH, log)
     if not by_pid:
         return 1
 
-    leads, source_counts, transfer_rule_counts = join_signals(by_pid, by_addr, by_owner, log)
+    senior_enabled = evaluate_senior_coverage(PARCEL_PATH, log)
+    suppressed: list[str] = []
+    if not senior_enabled:
+        suppressed.append("Senior Owner")
+    if not ROD_DOT_PATH.exists():
+        suppressed.append("Free & Clear")
+
+    leads, source_signal_counts, sources_per_tag = emit_tags(
+        by_pid, by_addr, senior_enabled, log
+    )
     log(f"[join] {len(leads):,} parcels with at least one signal attached")
 
     if args.dry_run:
-        log("[dry-run] skipping write")
+        # Print summary only
+        tag_counter: Counter = Counter()
+        for lead in leads.values():
+            for t in lead["tags"]:
+                tag_counter[t] += 1
+        log(f"\n[dry-run] tag counts: {dict(tag_counter)}")
         return 0
 
-    write_output(leads, by_pid, source_counts, transfer_rule_counts, log)
+    write_output(leads, by_pid, source_signal_counts, sources_per_tag,
+                 suppressed, log)
     return 0
 
 
