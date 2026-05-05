@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>New Hanover Intel — Motivated-Seller Intelligence</title>
-  <meta name="description" content="Motivated-seller intelligence pipeline for New Hanover County, NC — daily-refreshed stacked distress-pattern leads from public records." />
+  <title>New Hanover Intel</title>
+  <meta name="description" content="Motivated-seller intelligence for New Hanover County, NC — daily-refreshed property intelligence with operator-language tags." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -26,6 +26,15 @@
       --hot-bg: rgba(244, 63, 94, 0.12);
       --warm-bg: rgba(245, 158, 11, 0.12);
       --active-bg: rgba(59, 130, 246, 0.12);
+      --tag-distress: #F87171;
+      --tag-distress-bg: rgba(248, 113, 113, 0.12);
+      --tag-distress-bd: rgba(248, 113, 113, 0.35);
+      --tag-owner: #60A5FA;
+      --tag-owner-bg: rgba(96, 165, 250, 0.12);
+      --tag-owner-bd: rgba(96, 165, 250, 0.35);
+      --tag-derived: #A78BFA;
+      --tag-derived-bg: rgba(167, 139, 250, 0.12);
+      --tag-derived-bd: rgba(167, 139, 250, 0.35);
     }
     * { box-sizing: border-box; }
     html, body {
@@ -36,7 +45,10 @@
     }
     .wrap { max-width: 1500px; margin: 0 auto; padding: 24px 20px 80px; }
 
-    .topbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px; margin-bottom: 22px;
+    }
     .brand { display: flex; align-items: center; gap: 12px; }
     .brand-mark {
       width: 38px; height: 38px; border-radius: 8px;
@@ -47,38 +59,63 @@
     }
     h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.4px; }
     .tag { color: var(--accent-soft); font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600; }
-    .meta { color: var(--text-dim); font-size: 12px; text-align: right; }
+
+    .modetoggle {
+      display: inline-flex; align-items: stretch;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden;
+    }
+    .modetoggle button {
+      background: transparent; color: var(--text-dim); border: none; cursor: pointer;
+      padding: 10px 18px; font-family: inherit; font-size: 13px; font-weight: 600;
+      letter-spacing: 0.3px; transition: color 0.15s, background 0.15s;
+    }
+    .modetoggle button:hover { color: var(--text); }
+    .modetoggle button.on {
+      background: var(--accent); color: #0A0A0A;
+      box-shadow: inset 0 0 12px rgba(255,255,255,0.08);
+    }
+    .modetoggle button .ct {
+      margin-left: 6px; font-weight: 700; opacity: 0.9;
+    }
+
+    .meta {
+      color: var(--text-dim); font-size: 12px; text-align: right; line-height: 1.5;
+    }
     .meta a { color: var(--accent-soft); text-decoration: none; }
     .meta a:hover { text-decoration: underline; }
+    .meta code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: var(--accent-soft); }
 
-    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 18px; }
-    .stat {
-      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-      padding: 14px 16px; transition: border-color 0.15s;
+    .hero {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 18px 22px; margin-bottom: 18px;
+      display: flex; gap: 24px; align-items: center; flex-wrap: wrap;
     }
-    .stat:hover { border-color: var(--accent); }
-    .stat .label { color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
-    .stat .value { font-size: 24px; font-weight: 700; margin-top: 4px; letter-spacing: -0.5px; }
-    .stat .sub { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
-    .stat.hot .value { color: var(--hot); }
-    .stat.warm .value { color: var(--warm); }
-    .stat.active .value { color: var(--active); }
+    .hero .stat { min-width: 110px; }
+    .hero .stat .label { color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.9px; font-weight: 600; }
+    .hero .stat .value { font-size: 22px; font-weight: 700; margin-top: 2px; letter-spacing: -0.4px; }
+    .hero .stat.hot .value { color: var(--hot); }
+    .hero .stat.warm .value { color: var(--warm); }
+    .hero .stat.active .value { color: var(--active); }
+    .hero .blurb { color: var(--text-dim); font-size: 12.5px; flex: 1 1 280px; }
 
     .filterbar {
-      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-      padding: 14px 16px; margin-bottom: 12px;
-      display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 18px; margin-bottom: 12px;
     }
-    .filter-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-    .filter-group .lbl {
+    .filter-row {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px;
+    }
+    .filter-row + .filter-row { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+    .lbl {
       color: var(--text-dim); font-size: 10px; text-transform: uppercase;
-      letter-spacing: 1px; font-weight: 600; margin-right: 4px;
+      letter-spacing: 1px; font-weight: 600; flex: 0 0 auto;
     }
     .pill {
       background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
       padding: 5px 12px; border-radius: 999px;
       font-size: 12px; font-weight: 500; cursor: pointer;
-      transition: all 0.15s; user-select: none;
+      transition: all 0.15s; user-select: none; line-height: 1.4;
     }
     .pill:hover { border-color: var(--accent); }
     .pill.on {
@@ -89,62 +126,43 @@
     .pill.tier-pill.on.warm  { background: var(--warm); border-color: var(--warm); box-shadow: 0 0 12px rgba(245,158,11,0.4); }
     .pill.tier-pill.on.active{ background: var(--active); border-color: var(--active); }
     .pill .ct { font-weight: 700; margin-left: 6px; opacity: 0.85; }
+
     .search {
-      flex: 1 1 220px; min-width: 200px;
+      flex: 1 1 240px; min-width: 220px;
       background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
-      padding: 8px 12px; border-radius: 8px;
+      padding: 9px 14px; border-radius: 8px;
       font-family: inherit; font-size: 13px;
     }
     .search:focus { outline: none; border-color: var(--accent); }
-    .clear, .export {
-      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
-      font-family: inherit;
+    .btn {
+      padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px;
+      font-family: inherit; font-weight: 600;
+      background: var(--panel-2); color: var(--text-dim);
+      border: 1px solid var(--border);
     }
-    .clear { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
-    .clear:hover { color: var(--text); border-color: var(--accent); }
-    .export {
-      background: var(--accent); color: #0A0A0A; border: 1px solid var(--accent);
-      font-weight: 600;
+    .btn:hover { color: var(--text); border-color: var(--accent); }
+    .btn.primary {
+      background: var(--accent); color: #0A0A0A; border-color: var(--accent);
     }
-    .export:hover { background: var(--accent-soft); }
-    .export:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    .slider-group { display: flex; align-items: center; gap: 8px; }
-    .slider-group input[type=range] { width: 110px; accent-color: var(--accent); }
-    .slider-group .v {
-      font-variant-numeric: tabular-nums;
-      color: var(--accent-soft); font-size: 12px; font-weight: 600;
-      min-width: 40px; text-align: right;
-    }
-    .toggle {
-      background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
-      padding: 5px 10px; border-radius: 6px;
-      font-size: 11px; font-weight: 500; cursor: pointer;
-      user-select: none; display: inline-flex; align-items: center; gap: 6px;
-    }
-    .toggle .dot {
-      width: 8px; height: 8px; border-radius: 50%; background: var(--muted);
-      transition: all 0.15s;
-    }
-    .toggle.on { color: var(--accent-soft); border-color: var(--accent); }
-    .toggle.on .dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-
-    .doctype-row {
-      flex-basis: 100%;
-      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-      padding-top: 8px; border-top: 1px dashed var(--border); margin-top: 4px;
-    }
+    .btn.primary:hover { background: var(--accent-soft); border-color: var(--accent-soft); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .summary {
       color: var(--text-dim); font-size: 13px; margin: 8px 4px 12px;
     }
     .summary strong { color: var(--text); }
 
-    table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .empty-state {
+      background: var(--panel); border: 1px dashed var(--border); border-radius: 12px;
+      padding: 60px 30px; text-align: center; color: var(--text-dim); font-size: 14px;
+    }
+    .empty-state strong { color: var(--text); display: block; margin-bottom: 6px; font-size: 16px; }
+
+    table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
     thead th {
       background: var(--panel-2); color: var(--text-dim);
       font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px;
-      text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border);
+      text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--border);
       cursor: pointer; user-select: none; white-space: nowrap;
     }
     thead th.no-sort { cursor: default; }
@@ -167,55 +185,56 @@
     .tier-badge.warm { background: var(--warm-bg); color: var(--warm); }
     .tier-badge.active { background: var(--active-bg); color: var(--active); }
 
-    .new24 {
-      display: inline-block; padding: 1px 6px; border-radius: 999px;
-      font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-soft));
-      color: #0A0A0A; margin-left: 6px;
+    .diff-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 4px;
+      font-size: 9px; font-weight: 700; letter-spacing: 0.5px; margin-left: 6px;
+      vertical-align: 2px;
+    }
+    .diff-badge.new {
+      background: linear-gradient(135deg, var(--accent), var(--accent-soft)); color: #0A0A0A;
+    }
+    .diff-badge.tagged {
+      background: linear-gradient(135deg, var(--warm), #fbbf24); color: #0A0A0A;
     }
 
-    .pat {
+    .tag-chip {
       display: inline-block; padding: 2px 7px; border-radius: 4px;
-      font-size: 10px; font-weight: 700; letter-spacing: 0.5px; margin-right: 3px;
-      background: var(--panel-2); color: var(--accent-soft); border: 1px solid var(--border);
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.2px;
+      margin: 1px 2px 1px 0; line-height: 1.4;
+      border: 1px solid;
     }
-    .pat.jfc { color: #F87171; border-color: rgba(248,113,113,0.35); }
-    .pat.tax { color: #FBBF24; border-color: rgba(251,191,36,0.35); }
-    .pat.estate { color: #A78BFA; border-color: rgba(167,139,250,0.35); }
-    .pat.code { color: #34D399; border-color: rgba(52,211,153,0.35); }
-    .pat.lien { color: #F472B6; border-color: rgba(244,114,182,0.35); }
-    .pat.transfer { color: #FCD34D; border-color: rgba(252,211,77,0.35); }
-
-    .flag {
-      display: inline-block; padding: 1px 6px; border-radius: 3px;
-      font-size: 10px; font-weight: 500; margin: 1px 2px 1px 0;
-      background: var(--muted); color: var(--text-dim);
+    .tag-chip.distress {
+      background: var(--tag-distress-bg); color: var(--tag-distress); border-color: var(--tag-distress-bd);
     }
-    .flag.urgent { background: rgba(244,63,94,0.15); color: var(--hot); }
+    .tag-chip.owner {
+      background: var(--tag-owner-bg); color: var(--tag-owner); border-color: var(--tag-owner-bd);
+    }
+    .tag-chip.derived {
+      background: var(--tag-derived-bg); color: var(--tag-derived); border-color: var(--tag-derived-bd);
+    }
 
     .addr { font-weight: 600; color: var(--text); }
     .city { color: var(--text-dim); font-size: 10.5px; margin-top: 2px; }
-    .owner { color: var(--text); font-size: 12.5px; }
+    .pid-link { color: var(--accent-soft); font-size: 10.5px; text-decoration: none; }
+    .pid-link:hover { text-decoration: underline; }
+    .owner { color: var(--text); font-size: 12.5px; word-break: break-word; }
+    .owner.absentee { color: var(--warm); }
 
-    .empty {
-      text-align: center; padding: 60px 20px; color: var(--text-dim); font-size: 14px;
-    }
-    .loading {
-      text-align: center; padding: 80px 20px; color: var(--text-dim); font-size: 14px;
-    }
+    .num { font-variant-numeric: tabular-nums; }
 
-    /* Expanded row content */
     .expand-grid {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 14px; margin-bottom: 14px;
     }
-    .expand-section { background: var(--panel-2); border: 1px solid var(--border);
-      border-radius: 8px; padding: 12px; }
+    .expand-section {
+      background: var(--panel-2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px;
+    }
     .expand-section h4 {
       margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px;
       color: var(--accent-soft); font-weight: 700;
     }
-    .kv { display: grid; grid-template-columns: minmax(110px, 0.4fr) 1fr; gap: 4px 10px; font-size: 12px; }
+    .kv { display: grid; grid-template-columns: minmax(120px, 0.4fr) 1fr; gap: 4px 10px; font-size: 12px; }
     .kv .k { color: var(--text-dim); }
     .kv .v { color: var(--text); word-break: break-word; }
     .signal-list { display: flex; flex-direction: column; gap: 8px; }
@@ -223,22 +242,35 @@
       background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
       padding: 8px 10px; font-size: 12px; line-height: 1.45;
     }
-    .signal-item .head { display: flex; justify-content: space-between; gap: 8px; }
+    .signal-item .head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
     .signal-item .src { color: var(--text-dim); font-size: 10px; }
     .signal-item code { font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 11px; color: var(--accent-soft); }
-    .deep-links { display: flex; gap: 12px; margin-top: 8px; }
+    .deep-links { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
     .deep-links a {
       color: var(--accent-soft); font-size: 11px; text-decoration: none;
       padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px;
+      transition: border-color 0.15s;
     }
     .deep-links a:hover { border-color: var(--accent); }
+
+    .render-cap-msg {
+      background: var(--panel); border: 1px dashed var(--border); border-radius: 8px;
+      padding: 14px 18px; color: var(--text-dim); font-size: 13px; text-align: center;
+      margin-top: 12px;
+    }
+
+    .footer {
+      color: var(--text-dim); font-size: 12px; margin-top: 28px; text-align: center;
+    }
+    .footer code { font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 11px; color: var(--accent-soft); }
+    .footer a { color: var(--accent-soft); }
 
     @media (max-width: 800px) {
       .wrap { padding: 16px 12px 60px; }
       .meta { text-align: left; }
       table { font-size: 11.5px; }
       thead th, tbody td { padding: 8px 8px; }
-      .stat .value { font-size: 20px; }
+      .hero { gap: 14px; }
     }
   </style>
 </head>
@@ -250,70 +282,38 @@
       <div class="brand-mark">NH</div>
       <div>
         <div class="tag">New Hanover Intel</div>
-        <h1>Motivated-Seller Intelligence — New Hanover County, NC</h1>
+        <h1>Property intelligence — New Hanover County, NC</h1>
       </div>
     </div>
+    <div class="modetoggle" id="modetoggle" role="tablist">
+      <button id="mode_today" class="on" data-mode="today">Today <span class="ct" id="mode_today_ct">—</span></button>
+      <button id="mode_all" data-mode="all">All Leads <span class="ct" id="mode_all_ct">—</span></button>
+    </div>
     <div class="meta">
-      <div>Last refreshed: <strong id="generated_at">—</strong></div>
+      <div>Last refresh: <strong id="generated_at">—</strong></div>
       <div>Source commit: <code id="source_commit">—</code></div>
-      <div><a href="methodology.html">Methodology &amp; sources →</a></div>
+      <div><a href="methodology.html">Methodology &amp; data sources →</a></div>
     </div>
   </div>
 
-  <div class="stats" id="stats"></div>
+  <div class="hero" id="hero"></div>
 
   <div class="filterbar" id="filterbar">
-    <div class="filter-group">
+    <div class="filter-row">
       <span class="lbl">Tier</span>
-      <span class="pill tier-pill on hot" data-tier="all">All <span class="ct" id="ct_all">—</span></span>
-      <span class="pill tier-pill" data-tier="hot">Hot <span class="ct" id="ct_hot">—</span></span>
-      <span class="pill tier-pill" data-tier="warm">Warm <span class="ct" id="ct_warm">—</span></span>
-      <span class="pill tier-pill" data-tier="active">Active <span class="ct" id="ct_active">—</span></span>
+      <span class="pill tier-pill on hot" data-tier="all">All <span class="ct" id="ct_tier_all">—</span></span>
+      <span class="pill tier-pill" data-tier="hot">Hot <span class="ct" id="ct_tier_hot">—</span></span>
+      <span class="pill tier-pill" data-tier="warm">Warm <span class="ct" id="ct_tier_warm">—</span></span>
+      <span class="pill tier-pill" data-tier="active">Active <span class="ct" id="ct_tier_active">—</span></span>
     </div>
-
-    <div class="filter-group">
-      <span class="lbl">Patterns</span>
-      <span class="pill pattern-pill" data-pattern="jfc">jfc <span class="ct" data-ct-pattern="jfc">—</span></span>
-      <span class="pill pattern-pill" data-pattern="tax">tax <span class="ct" data-ct-pattern="tax">—</span></span>
-      <span class="pill pattern-pill" data-pattern="estate">estate <span class="ct" data-ct-pattern="estate">—</span></span>
-      <span class="pill pattern-pill" data-pattern="code">code <span class="ct" data-ct-pattern="code">—</span></span>
-      <span class="pill pattern-pill" data-pattern="lien">lien <span class="ct" data-ct-pattern="lien">—</span></span>
-      <span class="pill pattern-pill" data-pattern="transfer">transfer <span class="ct" data-ct-pattern="transfer">—</span></span>
+    <div class="filter-row">
+      <span class="lbl">Tags</span>
+      <span id="tag_pills"></span>
     </div>
-
-    <div class="filter-group">
-      <span class="lbl">Min equity %</span>
-      <div class="slider-group">
-        <input type="range" id="equity_slider" min="0" max="100" step="5" value="0">
-        <span class="v" id="equity_v">0%</span>
-      </div>
-    </div>
-
-    <div class="filter-group">
-      <span class="lbl">Min years owned</span>
-      <div class="slider-group">
-        <input type="range" id="years_slider" min="0" max="50" step="1" value="0">
-        <span class="v" id="years_v">0</span>
-      </div>
-    </div>
-
-    <div class="filter-group">
-      <span class="lbl">Toggles</span>
-      <span class="toggle" data-toggle="absentee"><span class="dot"></span>absentee</span>
-      <span class="toggle" data-toggle="entity_only"><span class="dot"></span>entity-only</span>
-      <span class="toggle" data-toggle="senior"><span class="dot"></span>senior</span>
-      <span class="toggle" data-toggle="demolition"><span class="dot"></span>demolition</span>
-      <span class="toggle" data-toggle="multi_juris"><span class="dot"></span>multi-juris delq</span>
-      <span class="toggle" data-toggle="new24"><span class="dot"></span>new in 24h</span>
-    </div>
-
-    <input type="text" class="search" id="search" placeholder="Search address, owner, PID, case#, decedent…" />
-    <button class="clear" id="clear_btn">Clear filters</button>
-    <button class="export" id="export_btn">Export CSV</button>
-
-    <div class="doctype-row">
-      <span class="lbl">Doc types</span>
-      <span id="doctype_pills"></span>
+    <div class="filter-row">
+      <input type="text" class="search" id="search" placeholder="Search address, owner, PID, mailing, case#, tags, signal payload…" />
+      <button class="btn" id="clear_btn">Clear filters</button>
+      <button class="btn primary" id="export_btn">Export CSV</button>
     </div>
   </div>
 
@@ -325,24 +325,27 @@
         <tr>
           <th class="no-sort">#</th>
           <th data-sort="tier">Tier</th>
-          <th data-sort="stack_count">Stack</th>
+          <th data-sort="distress_tag_count">Distress</th>
           <th data-sort="address">Address</th>
-          <th data-sort="owner">Owner</th>
-          <th data-sort="patterns" class="no-sort">Patterns</th>
-          <th data-sort="apr_total">Assessed</th>
+          <th data-sort="owner_name">Owner</th>
+          <th data-sort="tags" class="no-sort">Tags</th>
+          <th data-sort="total_market_value">Mkt Value</th>
+          <th data-sort="sale_date">Sale Date</th>
+          <th data-sort="sale_price">Sale Price</th>
           <th data-sort="years_owned">Yrs</th>
-          <th data-sort="raw_score">Score</th>
         </tr>
       </thead>
       <tbody id="tbody">
-        <tr><td colspan="9" class="loading">Loading leads…</td></tr>
+        <tr><td colspan="10" style="padding: 80px 20px; text-align: center; color: var(--text-dim);">Loading leads…</td></tr>
       </tbody>
     </table>
+    <div id="render_cap_msg" class="render-cap-msg" style="display: none;"></div>
   </div>
 
-  <div class="meta" style="margin-top: 24px; text-align: center;">
+  <div class="footer">
     Built by Jarvis · <a href="methodology.html">methodology &amp; data sources</a> ·
-    <a href="https://github.com/xcerebroai/new-hanover-intel" target="_blank">repo</a>
+    <a href="https://github.com/xcerebroai/new-hanover-intel" target="_blank">repo</a> ·
+    Last updated: <strong id="footer_ts">—</strong> · commit <code id="footer_commit">—</code>
   </div>
 </div>
 
@@ -350,75 +353,46 @@
 // =========================================================================
 // State + the single matches() function
 // =========================================================================
-let LEADS = null;
-let RECORDS = [];
-let PREVIOUS_PIDS = new Set();
+let LEADS_PAYLOAD = null;
+let RECORDS = [];          // all records
+let ACTIVE = [];           // working set: today or all
+let DIFF_ENABLED = true;   // flips false when first run baseline (everything 'existing')
+const RENDER_CAP = 1000;
+
+const TAG_CATS = {
+  distress: new Set(),
+  owner: new Set(),
+  derived: new Set(),
+};
 
 const filters = {
+  mode: "today",       // 'today' or 'all'
   tier: "all",
-  patterns: new Set(),
-  docTypes: new Set(),
-  minEquity: 0,
-  minYearsOwned: 0,
-  absentee: false,
-  entity_only: false,
-  senior: false,
-  demolition: false,
-  multi_juris: false,
-  new24: false,
+  tags: new Set(),
   search: "",
 };
 
-let sortKey = "raw_score";
-let sortDir = -1;  // -1 desc, +1 asc
+let sortKey = "distress_tag_count";
+let sortDir = -1;
 let expandedPid = null;
 
 // THE single matches(lead) function — used for BOTH the rendered table AND
-// every filter-count badge. Two-Truths Bug prevention: anything else that
-// counts visible records must derive from the same `filtered` set.
+// every count badge. Two-Truths Bug prevention: tier counts and pill counts
+// derive from the same `filtered` set, never from a parallel filter impl.
 function matches(lead) {
+  // Mode gate is applied OUTSIDE matches() at the dataset level (ACTIVE
+  // is set to either today's leads or all leads). matches() handles all
+  // other filter dimensions.
   if (filters.tier !== "all" && lead.tier !== filters.tier) return false;
-  if (filters.patterns.size > 0) {
-    let any = false;
-    for (const p of lead.patterns || []) if (filters.patterns.has(p)) { any = true; break; }
-    if (!any) return false;
-  }
-  if (filters.docTypes.size > 0) {
-    let any = false;
-    for (const d of lead.doc_types || []) if (filters.docTypes.has(d)) { any = true; break; }
-    if (!any) return false;
-  }
-  if (filters.absentee && !lead.is_absentee) return false;
-  if (filters.entity_only && !lead.is_entity) return false;
-  if (filters.senior && !lead.is_senior) return false;
-  if (filters.demolition) {
-    if (!(lead.flags || []).includes("demolition_permit")) return false;
-  }
-  if (filters.multi_juris) {
-    if (!(lead.flags || []).includes("multi_juris_delinquent")) return false;
-  }
-  if (filters.new24) {
-    if (!lead._is_new) return false;
-  }
-  if (filters.minEquity > 0) {
-    if ((lead.estimated_equity_pct ?? -1) < filters.minEquity) return false;
-  }
-  if (filters.minYearsOwned > 0) {
-    if ((lead.years_owned ?? 0) < filters.minYearsOwned) return false;
+  if (filters.tags.size > 0) {
+    // AND logic — lead must have ALL selected tags
+    for (const t of filters.tags) {
+      if (!(lead.tags || []).includes(t)) return false;
+    }
   }
   if (filters.search) {
-    const blob = (
-      (lead.owner || "") + " " +
-      (lead.address || "") + " " +
-      (lead.pid || "") + " " +
-      (lead.mapidkey || "") + " " +
-      (lead.muni || "") + " " +
-      (lead.city || "") + " " +
-      Object.values(lead.signals || {}).flat()
-        .map(s => JSON.stringify(s))
-        .join(" ")
-    ).toLowerCase();
-    if (!blob.includes(filters.search.toLowerCase())) return false;
+    const q = filters.search.toLowerCase();
+    if (!(lead._search_blob || "").includes(q)) return false;
   }
   return true;
 }
@@ -427,79 +401,156 @@ function matches(lead) {
 // Loading + initial paint
 // =========================================================================
 async function load() {
-  // Fetch current and previous in parallel; previous is optional.
-  const [cur, prev] = await Promise.allSettled([
-    fetch("data/leads.json?t=" + Date.now()).then(r => r.json()),
-    fetch("data/leads.previous.json?t=" + Date.now()).then(r => r.ok ? r.json() : null),
-  ]);
-  if (cur.status !== "fulfilled") {
+  let payload;
+  try {
+    const res = await fetch("data/leads.json?t=" + Date.now());
+    payload = await res.json();
+  } catch (e) {
     document.getElementById("tbody").innerHTML =
-      `<tr><td colspan="9" class="empty">Could not load data/leads.json — has the pipeline run?</td></tr>`;
+      `<tr><td colspan="10" style="padding: 60px; text-align: center; color: var(--text-dim);">Could not load data/leads.json — has the pipeline run?</td></tr>`;
     document.getElementById("summary").textContent = "No data";
     return;
   }
-  LEADS = cur.value;
-  RECORDS = LEADS.records || [];
-
-  if (prev.status === "fulfilled" && prev.value && prev.value.records) {
-    PREVIOUS_PIDS = new Set(prev.value.records.map(r => r.pid));
+  if (!payload || !payload.header || !Array.isArray(payload.records)) {
+    document.getElementById("tbody").innerHTML =
+      `<tr><td colspan="10" style="padding: 60px; text-align: center; color: var(--text-dim);">leads.json has unexpected shape — expected { header, records }.</td></tr>`;
+    return;
   }
-  // Mark new-in-24h on each record
-  for (const r of RECORDS) r._is_new = !PREVIOUS_PIDS.has(r.pid);
+
+  LEADS_PAYLOAD = payload;
+  RECORDS = payload.records || [];
+
+  // Tag categorization
+  const tc = payload.header.tag_categories || {};
+  TAG_CATS.distress = new Set(tc.distress || []);
+  TAG_CATS.owner = new Set(tc.owner || []);
+  TAG_CATS.derived = new Set(tc.derived || []);
+
+  // Precompute search blob per lead — only searchable text + signal summaries
+  for (const r of RECORDS) {
+    const sigSummaries = [];
+    for (const tag of Object.keys(r.signals || {})) {
+      for (const s of r.signals[tag] || []) {
+        for (const k of ["case_number", "doc_type", "permit_type", "permit_number",
+                          "name", "owner", "decedent_name", "executor",
+                          "case", "address", "summary", "body", "source",
+                          "instrument_number", "book_code", "book_number",
+                          "page_number", "claim_deadline", "total_due",
+                          "sale_date", "sale_price", "permit_status"]) {
+          const v = s && s[k];
+          if (v != null && v !== "") sigSummaries.push(String(v));
+        }
+      }
+    }
+    r._search_blob = (
+      [r.address, r.owner_name, r.pid, r.mapidkey, r.muni, r.city,
+       r.mail_address, r.mail_city, r.mail_state, r.mail_zip,
+       r.subdiv, r.legal1,
+       (r.tags || []).join(" "),
+       sigSummaries.join(" ")
+      ].filter(Boolean).join(" ")
+    ).toLowerCase();
+  }
+
+  // Diff mode detection — if all records are 'existing' AND new+newly_tagged=0,
+  // we're in baseline and Today mode is intentionally empty.
+  const newCt = payload.header.new_count || 0;
+  const taggedCt = payload.header.newly_tagged_count || 0;
+  DIFF_ENABLED = (newCt + taggedCt) > 0;
 
   document.getElementById("generated_at").textContent =
-    LEADS.generated_at ? new Date(LEADS.generated_at).toUTCString() : "—";
+    payload.header.generated_at ? new Date(payload.header.generated_at).toUTCString() : "—";
   document.getElementById("source_commit").textContent =
-    LEADS.source_commit || "—";
+    payload.header.source_commit || "—";
+  document.getElementById("footer_ts").textContent =
+    payload.header.generated_at ? new Date(payload.header.generated_at).toUTCString() : "—";
+  document.getElementById("footer_commit").textContent =
+    payload.header.source_commit || "—";
 
-  renderStats();
-  renderDocTypePills();
-  bindFilters();
+  // Mode counts
+  document.getElementById("mode_today_ct").textContent = (newCt + taggedCt).toLocaleString();
+  document.getElementById("mode_all_ct").textContent = RECORDS.length.toLocaleString();
+
+  bindEvents();
+  applyUrlMode();
+  renderHero();
+  renderTagPills();
+  switchMode(filters.mode);
+}
+
+function applyUrlMode() {
+  const params = new URLSearchParams(window.location.search);
+  const m = params.get("view");
+  filters.mode = (m === "all") ? "all" : "today";
+}
+
+function switchMode(mode) {
+  filters.mode = mode;
+  document.getElementById("mode_today").classList.toggle("on", mode === "today");
+  document.getElementById("mode_all").classList.toggle("on", mode === "all");
+  // Update URL without reloading
+  const params = new URLSearchParams(window.location.search);
+  params.set("view", mode);
+  history.replaceState(null, "", "?" + params.toString());
+  // Build active set
+  if (mode === "today") {
+    ACTIVE = RECORDS.filter(r => r._diff_status === "new" || r._diff_status === "newly_tagged");
+  } else {
+    ACTIVE = RECORDS.slice();
+  }
   refresh();
 }
 
 // =========================================================================
-// Stats
+// Hero stats (always reflect FULL dataset, not the current filtered view)
 // =========================================================================
-function renderStats() {
-  const el = document.getElementById("stats");
-  const tc = LEADS.tier_counts || {};
-  const pc = LEADS.pattern_counts || {};
-  const newCount = RECORDS.filter(r => r._is_new).length;
-  const stats = [
-    { label: "Total Leads", value: LEADS.total ?? RECORDS.length, cls: "" },
-    { label: "Hot (3+ patterns)", value: tc.hot ?? 0, cls: "hot" },
-    { label: "Warm (2 patterns)", value: tc.warm ?? 0, cls: "warm" },
-    { label: "Active (1 pattern)", value: tc.active ?? 0, cls: "active" },
-    { label: "Warm hi-confidence", value: (LEADS.warm_tier_high_confidence_pct ?? 0) + "%", cls: "warm",
-      sub: "absentee / demo / multi-juris / imminent sale" },
-    { label: "New in last 24h", value: newCount, cls: "" },
+function renderHero() {
+  const h = LEADS_PAYLOAD.header || {};
+  const tc = h.tier_counts || {};
+  const total = h.total_records ?? RECORDS.length;
+  const items = [
+    { label: "Total Leads", value: total },
+    { label: "Hot (≥3 distress)", value: tc.hot ?? 0, cls: "hot" },
+    { label: "Warm (2 distress)", value: tc.warm ?? 0, cls: "warm" },
+    { label: "Active (1 distress)", value: tc.active ?? 0, cls: "active" },
+    { label: "New today", value: h.new_count ?? 0 },
+    { label: "Newly tagged", value: h.newly_tagged_count ?? 0 },
   ];
-  el.innerHTML = stats.map(s => `
-    <div class="stat ${s.cls}">
-      <div class="label">${s.label}</div>
-      <div class="value">${typeof s.value === "number" ? s.value.toLocaleString() : s.value}</div>
-      ${s.sub ? `<div class="sub">${s.sub}</div>` : ""}
-    </div>
-  `).join("");
+  const blurb = `<div class="blurb">PropStream-style intelligence stacked from public records. Tier comes from distress tag depth — owner-profile and derived tags are filters, not promoters. <a href="methodology.html" style="color: var(--accent-soft); text-decoration: none;">How it works →</a></div>`;
+  document.getElementById("hero").innerHTML =
+    items.map(i =>
+      `<div class="stat ${i.cls || ""}"><div class="label">${i.label}</div><div class="value num">${(typeof i.value === "number" ? i.value.toLocaleString() : i.value)}</div></div>`
+    ).join("") + blurb;
 }
 
 // =========================================================================
-// Doc-type pills (dynamic from doc_type_counts header)
+// Tag pills (dynamic from header.tag_counts; cap at 15)
 // =========================================================================
-function renderDocTypePills() {
-  const el = document.getElementById("doctype_pills");
-  const dtc = LEADS.doc_type_counts || {};
-  const sorted = Object.entries(dtc).sort((a, b) => b[1] - a[1]);
-  el.innerHTML = sorted.map(([dt, n]) =>
-    `<span class="pill doctype-pill" data-dt="${escapeHtml(dt)}">${escapeHtml(dt)} <span class="ct" data-ct-dt="${escapeHtml(dt)}">${n}</span></span>`
-  ).join("");
+function renderTagPills() {
+  const tc = LEADS_PAYLOAD.header.tag_counts || {};
+  const sorted = Object.entries(tc).sort((a, b) => b[1] - a[1]).slice(0, 15);
+  const el = document.getElementById("tag_pills");
+  el.innerHTML = sorted.map(([t, n]) => {
+    const cat = tagCategoryFor(t);
+    return `<span class="pill tag-pill" data-tag="${escapeHtml(t)}" data-cat="${cat}">${escapeHtml(t)} <span class="ct" data-ct-tag="${escapeHtml(t)}">${n}</span></span>`;
+  }).join("");
+}
+
+function tagCategoryFor(tag) {
+  if (TAG_CATS.distress.has(tag)) return "distress";
+  if (TAG_CATS.owner.has(tag)) return "owner";
+  if (TAG_CATS.derived.has(tag)) return "derived";
+  return "owner";
 }
 
 // =========================================================================
-// Bind interactions
+// Bind events
 // =========================================================================
-function bindFilters() {
+function bindEvents() {
+  // Mode toggle
+  document.getElementById("mode_today").addEventListener("click", () => switchMode("today"));
+  document.getElementById("mode_all").addEventListener("click", () => switchMode("all"));
+
   // Tier pills
   document.querySelectorAll(".tier-pill").forEach(p => {
     p.addEventListener("click", () => {
@@ -510,76 +561,32 @@ function bindFilters() {
       refresh();
     });
   });
-  // Pattern pills
-  document.querySelectorAll(".pattern-pill").forEach(p => {
-    p.addEventListener("click", () => {
-      const k = p.dataset.pattern;
-      if (filters.patterns.has(k)) filters.patterns.delete(k);
-      else filters.patterns.add(k);
-      p.classList.toggle("on", filters.patterns.has(k));
-      refresh();
-    });
-  });
-  // Doc-type pills (delegated, since they render late)
-  document.getElementById("doctype_pills").addEventListener("click", (e) => {
-    const p = e.target.closest(".doctype-pill");
+  // Tag pills (delegated)
+  document.getElementById("tag_pills").addEventListener("click", (e) => {
+    const p = e.target.closest(".tag-pill");
     if (!p) return;
-    const k = p.dataset.dt;
-    if (filters.docTypes.has(k)) filters.docTypes.delete(k);
-    else filters.docTypes.add(k);
-    p.classList.toggle("on", filters.docTypes.has(k));
+    const t = p.dataset.tag;
+    if (filters.tags.has(t)) filters.tags.delete(t);
+    else filters.tags.add(t);
+    p.classList.toggle("on", filters.tags.has(t));
     refresh();
-  });
-  // Sliders
-  const eq = document.getElementById("equity_slider");
-  eq.addEventListener("input", () => {
-    filters.minEquity = +eq.value;
-    document.getElementById("equity_v").textContent = eq.value + "%";
-    refresh();
-  });
-  const yr = document.getElementById("years_slider");
-  yr.addEventListener("input", () => {
-    filters.minYearsOwned = +yr.value;
-    document.getElementById("years_v").textContent = yr.value;
-    refresh();
-  });
-  // Toggles
-  document.querySelectorAll(".toggle").forEach(t => {
-    t.addEventListener("click", () => {
-      const k = t.dataset.toggle;
-      filters[k] = !filters[k];
-      t.classList.toggle("on", !!filters[k]);
-      refresh();
-    });
   });
   // Search
   document.getElementById("search").addEventListener("input", debounce(e => {
     filters.search = e.target.value.trim();
     refresh();
-  }, 150));
+  }, 120));
   // Clear
   document.getElementById("clear_btn").addEventListener("click", () => {
     filters.tier = "all";
-    filters.patterns.clear();
-    filters.docTypes.clear();
-    filters.minEquity = 0;
-    filters.minYearsOwned = 0;
-    filters.absentee = false;
-    filters.entity_only = false;
-    filters.senior = false;
-    filters.demolition = false;
-    filters.multi_juris = false;
-    filters.new24 = false;
+    filters.tags.clear();
     filters.search = "";
     document.getElementById("search").value = "";
-    document.getElementById("equity_slider").value = "0";
-    document.getElementById("equity_v").textContent = "0%";
-    document.getElementById("years_slider").value = "0";
-    document.getElementById("years_v").textContent = "0";
-    document.querySelectorAll(".pill, .toggle").forEach(x => x.classList.remove("on"));
+    document.querySelectorAll(".pill").forEach(x => x.classList.remove("on"));
     document.querySelector('.tier-pill[data-tier="all"]').classList.add("on");
     refresh();
   });
+  // Export
   document.getElementById("export_btn").addEventListener("click", exportCsv);
   // Sort headers
   document.querySelectorAll("thead th[data-sort]").forEach(th => {
@@ -591,10 +598,11 @@ function bindFilters() {
       refresh();
     });
   });
-  // Row expansion
+  // Row expansion (delegated)
   document.getElementById("tbody").addEventListener("click", (e) => {
     const tr = e.target.closest("tr.row-anchor");
     if (!tr) return;
+    if (e.target.closest("a, .pid-link")) return; // don't toggle if clicking a link
     const pid = tr.dataset.pid;
     expandedPid = (expandedPid === pid ? null : pid);
     refresh();
@@ -602,36 +610,33 @@ function bindFilters() {
 }
 
 // =========================================================================
-// Refresh — recompute filtered + render everything from it
+// Refresh — single source of truth
 // =========================================================================
 function refresh() {
-  const filtered = RECORDS.filter(matches);
+  // Apply matches() to ACTIVE (which is mode-scoped)
+  const filtered = ACTIVE.filter(matches);
   const sorted = filtered.slice().sort(compareLeads);
 
+  // Tier + tag counts derived from the SAME filtered array
   const tierCounts = { all: filtered.length, hot: 0, warm: 0, active: 0 };
-  const patternCounts = { jfc: 0, tax: 0, estate: 0, code: 0, lien: 0, transfer: 0 };
-  const docTypeCounts = {};
+  const tagCounts = {};
   for (const r of filtered) {
-    tierCounts[r.tier] = (tierCounts[r.tier] || 0) + 1;
-    for (const p of r.patterns || []) patternCounts[p] = (patternCounts[p] || 0) + 1;
-    for (const d of r.doc_types || []) docTypeCounts[d] = (docTypeCounts[d] || 0) + 1;
+    if (r.tier && tierCounts.hasOwnProperty(r.tier)) tierCounts[r.tier]++;
+    for (const t of r.tags || []) tagCounts[t] = (tagCounts[t] || 0) + 1;
   }
-  // Update pill counts
-  document.getElementById("ct_all").textContent = tierCounts.all.toLocaleString();
-  document.getElementById("ct_hot").textContent = tierCounts.hot.toLocaleString();
-  document.getElementById("ct_warm").textContent = tierCounts.warm.toLocaleString();
-  document.getElementById("ct_active").textContent = tierCounts.active.toLocaleString();
-  for (const p of Object.keys(patternCounts)) {
-    const span = document.querySelector(`[data-ct-pattern="${p}"]`);
-    if (span) span.textContent = patternCounts[p].toLocaleString();
-  }
-  document.querySelectorAll("[data-ct-dt]").forEach(span => {
-    const dt = span.dataset.ctDt;
-    span.textContent = (docTypeCounts[dt] || 0).toLocaleString();
+  // Update pills with live counts
+  document.getElementById("ct_tier_all").textContent = tierCounts.all.toLocaleString();
+  document.getElementById("ct_tier_hot").textContent = tierCounts.hot.toLocaleString();
+  document.getElementById("ct_tier_warm").textContent = tierCounts.warm.toLocaleString();
+  document.getElementById("ct_tier_active").textContent = tierCounts.active.toLocaleString();
+  document.querySelectorAll("[data-ct-tag]").forEach(s => {
+    s.textContent = (tagCounts[s.dataset.ctTag] || 0).toLocaleString();
   });
-  // Summary line
+
+  // Summary
+  const modeLabel = filters.mode === "today" ? "today" : "in database";
   document.getElementById("summary").innerHTML =
-    `Showing <strong>${filtered.length.toLocaleString()}</strong> of <strong>${RECORDS.length.toLocaleString()}</strong> leads · ` +
+    `Showing <strong class="num">${filtered.length.toLocaleString()}</strong> of <strong class="num">${ACTIVE.length.toLocaleString()}</strong> ${modeLabel} · ` +
     `Hot <strong>${tierCounts.hot}</strong> · Warm <strong>${tierCounts.warm}</strong> · Active <strong>${tierCounts.active}</strong>`;
 
   renderTable(sorted);
@@ -644,7 +649,7 @@ function compareLeads(a, b) {
     const rank = { hot: 3, warm: 2, active: 1 };
     return ((rank[va] || 0) - (rank[vb] || 0)) * sortDir;
   }
-  if (sortKey === "address" || sortKey === "owner") {
+  if (sortKey === "address" || sortKey === "owner_name" || sortKey === "sale_date") {
     return ((va || "") < (vb || "") ? -1 : (va || "") > (vb || "") ? 1 : 0) * sortDir;
   }
   return (((va ?? -Infinity) - (vb ?? -Infinity)) * sortDir);
@@ -652,44 +657,91 @@ function compareLeads(a, b) {
 
 function renderTable(sorted) {
   const tb = document.getElementById("tbody");
+  const cap = document.getElementById("render_cap_msg");
+
+  // Empty states
   if (sorted.length === 0) {
-    tb.innerHTML = `<tr><td colspan="9" class="empty">No leads match the current filters.</td></tr>`;
+    if (filters.mode === "today" && ACTIVE.length === 0 && !DIFF_ENABLED) {
+      tb.innerHTML = `<tr><td colspan="10"><div class="empty-state">
+        <strong>Diff baseline established.</strong>
+        New leads appear here starting tomorrow.
+      </div></td></tr>`;
+    } else if (filters.mode === "today" && ACTIVE.length === 0) {
+      tb.innerHTML = `<tr><td colspan="10"><div class="empty-state">
+        <strong>No new or newly-tagged leads today.</strong>
+        Switch to All Leads to view the full database.
+      </div></td></tr>`;
+    } else {
+      tb.innerHTML = `<tr><td colspan="10"><div class="empty-state">
+        <strong>No leads match the current filters.</strong>
+        Adjust pills, search, or clear filters.
+      </div></td></tr>`;
+    }
+    cap.style.display = "none";
     return;
   }
+
+  // Render cap
+  let visible = sorted;
+  let hidden = 0;
+  if (sorted.length > RENDER_CAP) {
+    visible = sorted.slice(0, RENDER_CAP);
+    hidden = sorted.length - RENDER_CAP;
+  }
+
   const html = [];
-  sorted.forEach((r, i) => {
+  visible.forEach((r, i) => {
     const isExpanded = (expandedPid === r.pid);
+    const diffBadge = (r._diff_status === "new" ? '<span class="diff-badge new">NEW</span>' :
+                       r._diff_status === "newly_tagged" ? '<span class="diff-badge tagged">+TAG</span>' : '');
+    const absenteeCls = (r.tags || []).includes("Absentee Owner") ? "owner absentee" : "owner";
     html.push(`
       <tr class="row-anchor ${isExpanded ? "expanded-anchor" : ""}" data-pid="${escapeHtml(r.pid)}">
-        <td>${i + 1}</td>
-        <td><span class="tier-badge ${r.tier}">${r.tier}</span>${r._is_new ? '<span class="new24">NEW</span>' : ''}</td>
-        <td>${r.stack_count}</td>
-        <td><div class="addr">${escapeHtml(r.address || "—")}</div><div class="city">${escapeHtml(r.city || r.muni || "")}</div></td>
-        <td><div class="owner">${escapeHtml(r.owner || "—")}</div></td>
-        <td>${(r.patterns || []).map(p => `<span class="pat ${p}">${p}</span>`).join("")}</td>
-        <td>${fmtMoney(r.apr_total)}</td>
-        <td>${r.years_owned != null ? r.years_owned : "—"}</td>
-        <td>${r.raw_score}</td>
+        <td class="num">${i + 1}</td>
+        <td><span class="tier-badge ${r.tier}">${r.tier}</span>${diffBadge}</td>
+        <td class="num">${r.distress_tag_count}</td>
+        <td>
+          <div class="addr">${escapeHtml(r.address || "—")}</div>
+          <div class="city">${escapeHtml(r.city || r.muni || "")}</div>
+          <a class="pid-link" href="${escapeHtml(r.etax_url || "#")}" target="_blank" rel="noopener">${escapeHtml(r.pid)}</a>
+        </td>
+        <td><div class="${absenteeCls}">${escapeHtml(r.owner_name || "—")}</div></td>
+        <td>${(r.tags || []).map(t => `<span class="tag-chip ${tagCategoryFor(t)}">${escapeHtml(t)}</span>`).join("")}</td>
+        <td class="num">${fmtMoney(r.total_market_value)}</td>
+        <td class="num">${fmtDate(r.sale_date)}</td>
+        <td class="num">${fmtMoney(r.sale_price)}</td>
+        <td class="num">${r.years_owned != null ? r.years_owned : "—"}</td>
       </tr>
     `);
-    if (isExpanded) html.push(`<tr class="expanded"><td colspan="9">${renderExpand(r)}</td></tr>`);
+    if (isExpanded) {
+      html.push(`<tr class="expanded"><td colspan="10">${renderExpand(r)}</td></tr>`);
+    }
   });
   tb.innerHTML = html.join("");
+
+  if (hidden > 0) {
+    cap.style.display = "block";
+    cap.textContent = `${hidden.toLocaleString()} more rows hidden. Refine filters to narrow results.`;
+  } else {
+    cap.style.display = "none";
+  }
 }
 
 function renderExpand(r) {
+  const owner = r.owner_parsed || {};
+  const fullName = owner.full_name || r.owner_name || "—";
   const sigBlocks = [];
-  for (const [pat, sigs] of Object.entries(r.signals || {})) {
-    if (!sigs.length) continue;
+  for (const [tag, sigs] of Object.entries(r.signals || {})) {
+    if (!sigs || !sigs.length) continue;
     sigBlocks.push(`
       <div class="expand-section">
-        <h4><span class="pat ${pat}">${pat}</span> ${sigs.length} signal${sigs.length > 1 ? "s" : ""}</h4>
+        <h4><span class="tag-chip ${tagCategoryFor(tag)}">${escapeHtml(tag)}</span> ${sigs.length} signal${sigs.length > 1 ? "s" : ""}</h4>
         <div class="signal-list">
           ${sigs.map(s => `
             <div class="signal-item">
               <div class="head">
-                <span><strong>${escapeHtml(s.doc_type || pat)}</strong>${s.date ? ` · ${escapeHtml(s.date)}` : ""}</span>
-                <span class="src">${escapeHtml(s.source || "")}</span>
+                <span><strong>${escapeHtml(s.doc_type || tag)}</strong>${s.date ? ` · ${escapeHtml(s.date)}` : ""}</span>
+                <span class="src">${escapeHtml(s.source || "")}${s.join ? " · " + escapeHtml(s.join) : ""}</span>
               </div>
               <div>${formatSignalPayload(s)}</div>
             </div>
@@ -698,15 +750,13 @@ function renderExpand(r) {
       </div>
     `);
   }
-  const owner = r.owner_parsed || {};
-  const fullName = owner.full_name || r.owner || "—";
   return `
     <div class="expand-grid">
       <div class="expand-section">
         <h4>Identity</h4>
         <div class="kv">
           <div class="k">PID</div><div class="v"><code>${escapeHtml(r.pid || "")}</code></div>
-          <div class="k">PIN</div><div class="v"><code>${escapeHtml(r.mapid || "")}</code></div>
+          <div class="k">PIN / MAPID</div><div class="v"><code>${escapeHtml(r.mapid || "")}</code></div>
           <div class="k">Owner</div><div class="v">${escapeHtml(fullName)}</div>
           <div class="k">Site</div><div class="v">${escapeHtml(r.address || "—")}, ${escapeHtml(r.city || "")}</div>
           <div class="k">Mailing</div><div class="v">${escapeHtml(r.mail_address || "")}, ${escapeHtml(r.mail_city || "")} ${escapeHtml(r.mail_state || "")} ${escapeHtml(r.mail_zip || "")}</div>
@@ -731,17 +781,12 @@ function renderExpand(r) {
       <div class="expand-section">
         <h4>Sale / Transfer</h4>
         <div class="kv">
-          <div class="k">Sale date</div><div class="v">${escapeHtml((r.sale_date_iso || "").substring(0,10) || "—")}</div>
+          <div class="k">Sale date</div><div class="v">${fmtDate(r.sale_date)}</div>
           <div class="k">Sale price</div><div class="v">${fmtMoney(r.sale_price)}</div>
           <div class="k">Instrument</div><div class="v">${escapeHtml(r.sale_instrument || "—")}</div>
           <div class="k">Book / Page</div><div class="v">${escapeHtml(r.sale_book || "")} / ${escapeHtml(r.sale_page || "")}</div>
-          <div class="k">Equity %</div><div class="v">${r.estimated_equity_pct != null ? r.estimated_equity_pct + "%" : "—"}</div>
           <div class="k">Years owned</div><div class="v">${r.years_owned ?? "—"}</div>
         </div>
-      </div>
-      <div class="expand-section">
-        <h4>Distress flags</h4>
-        <div>${(r.flags || []).map(f => `<span class="flag ${urgentFlag(f) ? "urgent" : ""}">${escapeHtml(f)}</span>`).join(" ")}</div>
         <div class="deep-links">
           <a href="${escapeHtml(r.etax_url || "#")}" target="_blank" rel="noopener">Open in NHC etax →</a>
         </div>
@@ -752,33 +797,35 @@ function renderExpand(r) {
 }
 
 function formatSignalPayload(s) {
-  const skip = new Set(["source", "doc_type", "date", "_source"]);
+  const skip = new Set(["source", "doc_type", "date", "tag", "join"]);
   const lines = [];
   for (const [k, v] of Object.entries(s)) {
     if (skip.has(k)) continue;
     if (v == null || v === "") continue;
-    lines.push(`<span class="kv-line"><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v).substring(0, 200))}</span>`);
+    const text = String(v);
+    if (text.length > 200) {
+      lines.push(`<div><strong>${escapeHtml(k)}:</strong> ${escapeHtml(text.substring(0, 200))}…</div>`);
+    } else {
+      lines.push(`<div><strong>${escapeHtml(k)}:</strong> ${escapeHtml(text)}</div>`);
+    }
   }
-  return lines.join("<br>");
+  return lines.join("");
 }
 
-const URGENT_FLAGS = new Set([
-  "demolition_permit", "imminent_tax_sale", "delinquency_over_25k",
-  "post_estate_recent_sale", "nominal_consideration_recent_sale",
-]);
-function urgentFlag(f) { return URGENT_FLAGS.has(f); }
-
 // =========================================================================
-// CSV export
+// CSV export — exports the CURRENT FILTERED set under the current mode
 // =========================================================================
 function exportCsv() {
-  const filtered = RECORDS.filter(matches);
+  const filtered = ACTIVE.filter(matches);
   const headers = [
-    "pid", "address", "city", "muni", "owner", "first_name", "middle_name", "last_name",
-    "is_entity", "mail_address", "mail_city", "mail_state", "mail_zip",
-    "tier", "stack_count", "patterns", "flags", "doc_types",
-    "apr_total", "apr_land", "apr_bldg", "sale_date", "sale_price",
-    "estimated_equity_pct", "years_owned", "is_absentee", "etax_url",
+    "pid", "tier", "distress_tag_count", "tags",
+    "address", "city", "muni", "owner_name",
+    "is_entity", "first_name", "middle_name", "last_name",
+    "mail_address", "mail_city", "mail_state", "mail_zip",
+    "total_market_value", "apr_land", "apr_bldg",
+    "sale_date", "sale_price", "years_owned",
+    "sfla", "class_code", "land_use_code",
+    "subdiv", "legal1", "etax_url", "_diff_status",
     "phone1", "phone2", "phone3", "email1", "email2",
   ];
   const rows = [headers.join(",")];
@@ -786,33 +833,35 @@ function exportCsv() {
     const op = r.owner_parsed || {};
     rows.push([
       csv(r.pid),
+      csv(r.tier),
+      csv(r.distress_tag_count),
+      csv((r.tags || []).join("|")),
       csv(r.address),
       csv(r.city),
       csv(r.muni),
-      csv(r.owner),
+      csv(r.owner_name),
+      csv(r.is_entity),
       csv(op.first_name),
       csv(op.middle_name),
       csv(op.last_name),
-      csv(r.is_entity),
       csv(r.mail_address),
       csv(r.mail_city),
       csv(r.mail_state),
       csv(r.mail_zip),
-      csv(r.tier),
-      csv(r.stack_count),
-      csv((r.patterns || []).join("|")),
-      csv((r.flags || []).join("|")),
-      csv((r.doc_types || []).join("|")),
-      csv(r.apr_total),
+      csv(r.total_market_value),
       csv(r.apr_land),
       csv(r.apr_bldg),
-      csv((r.sale_date_iso || "").substring(0, 10)),
+      csv((r.sale_date || "").substring(0, 10)),
       csv(r.sale_price),
-      csv(r.estimated_equity_pct),
       csv(r.years_owned),
-      csv(r.is_absentee),
+      csv(r.sfla),
+      csv(r.class_code),
+      csv(r.land_use_code),
+      csv(r.subdiv),
+      csv(r.legal1),
       csv(r.etax_url),
-      "", "", "", "", "",  // skip-trace placeholders
+      csv(r._diff_status),
+      "", "", "", "", "",
     ].join(","));
   }
   const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -820,24 +869,27 @@ function exportCsv() {
   const a = document.createElement("a");
   const ts = new Date().toISOString().replace(/[:.]/g, "-").substring(0, 19);
   a.href = url;
-  a.download = `nh-leads-${ts}.csv`;
+  a.download = `nh-leads-${filters.mode}-${ts}.csv`;
   document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
 }
 
+// =========================================================================
+// Helpers
+// =========================================================================
 function csv(v) {
   if (v == null) return "";
   const s = String(v);
   if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
-
-// =========================================================================
-// Helpers
-// =========================================================================
 function fmtMoney(v) {
-  if (v == null || isNaN(v)) return "—";
+  if (v == null || v === "" || isNaN(v)) return "—";
   return "$" + Math.round(+v).toLocaleString();
+}
+function fmtDate(v) {
+  if (!v) return "—";
+  return String(v).substring(0, 10);
 }
 function escapeHtml(s) {
   if (s == null) return "";
