@@ -1,0 +1,33 @@
+{
+  "url": "https://xcerebroai.github.io/new-hanover-intel/?view=all",
+  "verified_at": "2026-05-05T18:08:55.334710+00:00",
+  "row_count": 1000,
+  "first_5_pids": [
+    "R04200-001-025-000",
+    "R02600-004-005-000",
+    "R03700-002-002-002",
+    "R01700-001-001-000",
+    "R07000-002-005-000"
+  ],
+  "first_5_addresses": [
+    "1640 AIRPORT BLV",
+    "4500 BLUE CLAY RD",
+    "1200 PORTERS NECK RD",
+    "3901 CASTLE HAYNE RD",
+    "4126 RIVER RD"
+  ],
+  "screenshot": "docs\\live_dashboard.png",
+  "mode_toggle": "PASS",
+  "tag_pill_click": "PASS",
+  "today_view_state": {
+    "url": "https://xcerebroai.github.io/new-hanover-intel/?view=today",
+    "row_count": 0,
+    "empty_state": 1
+  },
+  "all_view_state": {
+    "url": "https://xcerebroai.github.io/new-hanover-intel/?view=all",
+    "row_count": 1000
+  },
+  "console_errors": [],
+  "page_errors": []
+}
