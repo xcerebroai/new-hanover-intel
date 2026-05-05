@@ -53,7 +53,7 @@ DEFAULT_USER_AGENT = (
     "(+contact: infinitygauntletllc@gmail.com)"
 )
 RATE_LIMIT_SEC = 3.0  # polite per RECON.md
-ENTITY_BATCH_SIZE = 250  # NameDisplay handles ~250 entityIDs per POST safely
+ENTITY_BATCH_SIZE = 100  # NameDisplay times out on larger batches under load
 
 # Per-doctype groups. The slug becomes the JSONL filename suffix; the codes
 # list is what gets sent as instType[InstCodes][CODE]=CODE on NamePick. One

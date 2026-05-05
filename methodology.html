@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>New Hanover Intel — Methodology</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0A0A0A; --panel: #0F172A; --panel-2: #111c30;
+      --accent: #3B82F6; --accent-soft: #60A5FA;
+      --text: #E5E7EB; --text-dim: #94A3B8;
+      --border: #1E293B; --muted: #1F2937;
+      --hot: #F43F5E; --warm: #F59E0B;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-size: 14.5px; line-height: 1.6; }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 32px 24px 80px; }
+    .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+    .brand-mark { width: 36px; height: 36px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-soft) 100%);
+      display: grid; place-items: center; box-shadow: 0 0 24px rgba(59, 130, 246, 0.35);
+      font-weight: 700; font-size: 14px; color: #0A0A0A; }
+    .tag { color: var(--accent-soft); font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600; }
+    h1 { margin: 0 0 4px; font-size: 24px; font-weight: 700; letter-spacing: -0.4px; }
+    h2 { margin: 36px 0 12px; font-size: 18px; font-weight: 700; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    h3 { margin: 20px 0 8px; font-size: 15px; font-weight: 700; color: var(--accent-soft); }
+    p, li { color: var(--text); }
+    p.muted, .muted { color: var(--text-dim); font-size: 13px; }
+    a { color: var(--accent-soft); }
+    a:hover { color: var(--accent); }
+    code { font-family: ui-monospace, SF Mono, Menlo, monospace; background: var(--panel-2); border: 1px solid var(--border); padding: 1px 5px; border-radius: 4px; font-size: 13px; color: var(--accent-soft); }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { background: var(--panel-2); color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; }
+    td code { font-size: 12px; }
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.4px;
+      background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    }
+    .pill.hot { color: var(--hot); border-color: rgba(244,63,94,0.35); background: rgba(244,63,94,0.08); }
+    .pill.warm { color: var(--warm); border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.08); }
+    .pill.jfc { color: #F87171; border-color: rgba(248,113,113,0.35); }
+    .pill.tax { color: #FBBF24; border-color: rgba(251,191,36,0.35); }
+    .pill.estate { color: #A78BFA; border-color: rgba(167,139,250,0.35); }
+    .pill.code { color: #34D399; border-color: rgba(52,211,153,0.35); }
+    .pill.lien { color: #F472B6; border-color: rgba(244,114,182,0.35); }
+    .pill.transfer { color: #FCD34D; border-color: rgba(252,211,77,0.35); }
+    .callout { background: var(--panel); border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 6px; margin: 14px 0; font-size: 13px; }
+    .callout.warning { border-left-color: var(--warm); }
+    .meta { color: var(--text-dim); font-size: 12px; margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--border); }
+    .back { display: inline-block; margin-bottom: 18px; font-size: 12px; color: var(--accent-soft); text-decoration: none; }
+    .back:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <a class="back" href="index.html">← Dashboard</a>
+
+  <div class="topbar">
+    <div class="brand-mark">NH</div>
+    <div>
+      <div class="tag">New Hanover Intel</div>
+      <h1>Methodology &amp; data sources</h1>
+    </div>
+  </div>
+
+  <p>This page documents how leads in the dashboard are produced. The intent is auditability — every signal a lead carries is traceable to a public-records source, a date, and a join rule. No skip trace, no AVM, no MLS, no proprietary scoring.</p>
+
+  <h2>The 6-pattern stack</h2>
+  <p>A lead's tier is the count of <em>distinct</em> distress patterns that fire on its parcel. Score sums never determine tier — see <a href="#two-truths">Two-Truths invariant</a>. Six orthogonal patterns:</p>
+
+  <table>
+    <thead><tr><th>Pattern</th><th>Fires on</th><th>NH-specific notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="pill jfc">jfc</span><br><strong>Judicial Foreclosure</strong></td>
+        <td>StarNews foreclosure-sale notice (last 90 days), NHC active GS 105-374 schedule, ROD <code>FCL</code>/<code>N/F</code>/<code>SUB TR</code>/<code>FCL DEED</code> in last 18 months</td>
+        <td>NC is a power-of-sale state. eCourts (Tyler Odyssey) is AWS-WAF-CAPTCHA-gated, so newspaper notice flow + ROD recordings are the parallel feed.</td>
+      </tr>
+      <tr>
+        <td><span class="pill tax">tax</span><br><strong>Tax distress</strong></td>
+        <td>NHC delinquent-tax CSV with total due ≥ $500, parcel on the active GS 105-374 schedule</td>
+        <td>The county delinquent CSV is downloadable directly — 5,120 rows, monthly refresh, parcel-level. Rare among NC counties; this is the highest-volume signal.</td>
+      </tr>
+      <tr>
+        <td><span class="pill estate">estate</span><br><strong>Probate / Estate</strong></td>
+        <td>StarNews Notice to Creditors (decedent → owner-name match), ROD estate deeds (<code>ADMIN DEED</code>, <code>EXEC DEED</code>, <code>EXTRX DEED</code>, <code>COMMR DEED</code>)</td>
+        <td>Decedent-to-parcel join is fuzzy — uses last+first+middle prefix matching with a top-50-surnames guard to prevent false-positive explosion.</td>
+      </tr>
+      <tr>
+        <td><span class="pill code">code</span><br><strong>Code / Demolition</strong></td>
+        <td>NHC EnerGov building permit where <code>PERMIT_TYPE LIKE '%Demolition%'</code> in last 24 months</td>
+        <td><strong>Documented gap:</strong> NH publishes no code-enforcement case dataset. Wilmington's EnerGov SelfService is gated behind a Tyler SPA + CSRF token (Phase 2+ Playwright). The <code>code</code> pattern in this build is structurally weaker than Mecklenburg's Charlotte HNS feed.</td>
+      </tr>
+      <tr>
+        <td><span class="pill lien">lien</span><br><strong>Recorded lien / judgment</strong></td>
+        <td>ROD <code>JDGMT</code>, <code>LIEN</code>, <code>LIS PENS</code>, <code>BKTCY</code> recorded in last 24 months</td>
+        <td>NHC ROD has no separate codes for federal/state tax liens, mechanics liens, or HOA liens — they all file under the generic <code>LIEN</code> code with the type in the description. We regex-extract the sub-type into <code>doc_types</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="pill transfer">transfer</span><br><strong>Distressed conveyance</strong></td>
+        <td>ROD <code>QCD</code> (quitclaim) in last 24 months, ROD <code>DEED OF GIFT</code>, ROD separation-agreement co-signal, PropertyOwners-derived nominal-consideration recent sale (price &lt; 5% of assessed value), or estate notice posted within 18 months prior to a parcel sale</td>
+        <td>PropertyOwners-derived rules don't depend on ROD coverage. Even when ROD is unavailable, the nominal-sale and post-estate rules can fire from the parcel master alone.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Tier from stack depth</h3>
+  <p>Stack depth is the count of distinct patterns matched. Tier comes from stack depth — never from raw score sum. Sub-flags adjust raw score for in-tier sorting but never promote tier.</p>
+  <ul>
+    <li><span class="pill hot">Hot</span> — stack_count ≥ 3</li>
+    <li><span class="pill warm">Warm</span> — stack_count == 2</li>
+    <li><span class="pill">Active</span> — stack_count == 1</li>
+    <li>Records with zero matched patterns are dropped from <code>leads.json</code>.</li>
+  </ul>
+
+  <h2 id="two-truths">The Two-Truths invariant</h2>
+  <p>The pipeline calls <code>two_truths_check()</code> immediately before writing <code>leads.json</code>. It recomputes <code>tier_counts</code> and <code>pattern_counts</code> from <code>records[]</code> and compares to the header values. Any mismatch raises and the file is not written. This guards against the most common dashboard failure mode: counts and visible records computed from different code paths drifting.</p>
+  <p>The dashboard reuses the same pattern + flag fields for both filter counts and the rendered table — there is one <code>matches(lead)</code> function in <code>index.html</code> and it powers both the stat-row totals and the table.</p>
+
+  <h2>Data sources</h2>
+
+  <table>
+    <thead><tr><th>Source</th><th>Refresh</th><th>Auth</th><th>Anti-bot</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><a href="https://gis.nhcgov.com/server/rest/services/Layers/PropertyOwners/FeatureServer/0" target="_blank">NHC PropertyOwners (parcel master)</a></td>
+        <td>Daily ArcGIS pull</td>
+        <td>None</td>
+        <td>None — clean JSON with browser UA</td>
+      </tr>
+      <tr>
+        <td><a href="https://gis.nhcgov.com/server/rest/services/Thematic/EnergovPermitsPlans/FeatureServer/0" target="_blank">NHC EnerGov permits</a></td>
+        <td>Daily; filter on <code>PERMIT_TYPE LIKE '%Demolition%'</code></td>
+        <td>None</td>
+        <td>None</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.nhcgov.com/2877/Delinquent-Taxes" target="_blank">NHC delinquent tax CSV</a></td>
+        <td>Monthly (1st business day)</td>
+        <td>None</td>
+        <td>CivicEngage 404s on HEAD; use GET only</td>
+      </tr>
+      <tr>
+        <td><a href="https://www.nhcgov.com/345/Foreclosures" target="_blank">NHC foreclosure schedule (HTML)</a></td>
+        <td>On every refresh</td>
+        <td>None</td>
+        <td>None</td>
+      </tr>
+      <tr>
+        <td><a href="https://gis.nhcgov.com/server/rest/services/Layers/Stormwater_Impervious/FeatureServer/1" target="_blank">NHC stormwater permits</a></td>
+        <td>Weekly</td>
+        <td>None</td>
+        <td>None</td>
+      </tr>
+      <tr>
+        <td><a href="https://search.newhanoverdeeds.com/" target="_blank">NHC Register of Deeds (BIS PHP)</a></td>
+        <td>Daily date-range search per doc-type group</td>
+        <td>None</td>
+        <td>None observed — polite 3 sec/request</td>
+      </tr>
+      <tr>
+        <td><a href="https://classifieds.gannettclassifieds.com/marketplace/wlm/category/legals" target="_blank">Wilmington StarNews legal notices</a></td>
+        <td>Daily</td>
+        <td>None</td>
+        <td>None — Apache, no Cloudflare</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Sources NOT used (and why)</h3>
+  <ul>
+    <li><strong>eCourts (Tyler Odyssey)</strong> — AWS WAF CAPTCHA every 5 minutes for both anonymous and registered users. Tyler does not provide a bulk feed. Pivoted to StarNews newspaper notices for the SP foreclosure / E estate signals (NC statute requires statutory publication anyway).</li>
+    <li><strong>Wilmington EnerGov SelfService</strong> (city-issued permits + city code cases) — Tyler SPA + CSRF token + session cookie. Mid-effort Playwright scrape, deferred to Phase 2+.</li>
+    <li><strong>Beach towns</strong> (Wrightsville Beach, Carolina Beach, Kure Beach) — no public open-data portals. Town-issued permits are not in any open feed.</li>
+    <li><strong>Munis Self Service</strong> — per-parcel only, behind a Tyler Portico OAuth + AntiXsrfToken gate. The county's delinquent CSV is strictly superior — all 5,120 parcels in one file vs Munis' one-at-a-time UI.</li>
+    <li><strong>Kania Law Firm + RBCWB</strong> — neither services New Hanover. The Mecklenburg dual-firm pattern does not transfer; NHC handles GS 105-374 cases in-house through the Tax Department + Clerk of Superior Court.</li>
+    <li><strong>etax (iasWorld)</strong> — used as the dashboard's "open in county" deep-link target only. Not scraped for primary data; PropertyOwners feed already carries everything.</li>
+  </ul>
+
+  <h2>Doc-type taxonomy (ROD)</h2>
+  <p>The Register of Deeds at search.newhanoverdeeds.com exposes 369 instrument codes via checkboxes. Most are administrative or rare (UCC variants, plat books, articles of incorporation, etc.). The high-signal subset that this build targets:</p>
+
+  <table>
+    <thead><tr><th>Code</th><th>Full name</th><th>Pattern fired</th></tr></thead>
+    <tbody>
+      <tr><td><code>DEED</code></td><td>DEED</td><td>baseline (informational)</td></tr>
+      <tr><td><code>D/T</code></td><td>DEED OF TRUST</td><td>baseline (informational)</td></tr>
+      <tr><td><code>QCD</code></td><td>QUITCLAIM DEED</td><td><span class="pill transfer">transfer</span></td></tr>
+      <tr><td><code>ADMIN DEED</code></td><td>ADMINISTRATORS DEED</td><td><span class="pill estate">estate</span></td></tr>
+      <tr><td><code>EXEC DEED</code></td><td>EXECUTOR DEED</td><td><span class="pill estate">estate</span></td></tr>
+      <tr><td><code>EXTRX DEED</code></td><td>EXECUTRIX DEED</td><td><span class="pill estate">estate</span></td></tr>
+      <tr><td><code>COMMR DEED</code></td><td>COMMISSIONERS DEED (court-ordered sale)</td><td><span class="pill estate">estate</span> + <span class="pill jfc">jfc</span></td></tr>
+      <tr><td><code>SHERIF DEED</code></td><td>SHERIFF DEED (foreclosure / tax sale)</td><td><span class="pill estate">estate</span> + <span class="pill jfc">jfc</span></td></tr>
+      <tr><td><code>FCL DEED</code></td><td>FORECLOSURE DEED (post-sale)</td><td><span class="pill jfc">jfc</span></td></tr>
+      <tr><td><code>FCL</code></td><td>FORECLOSURE</td><td><span class="pill jfc">jfc</span></td></tr>
+      <tr><td><code>N/F</code></td><td>NOTICE OF FORECLOSURE</td><td><span class="pill jfc">jfc</span></td></tr>
+      <tr><td><code>SUB TR</code></td><td>SUBSTITUTION OF TRUSTEE (precursor)</td><td><span class="pill jfc">jfc</span></td></tr>
+      <tr><td><code>SUB TR DEED</code></td><td>SUBSTITUTE TRUSTEES DEED (post-sale)</td><td><span class="pill jfc">jfc</span></td></tr>
+      <tr><td><code>RES SUB/TR</code></td><td>RESIGNATION OF SUBSTITUTE TRUSTEE</td><td><span class="pill jfc">jfc</span></td></tr>
+      <tr><td><code>JDGMT</code></td><td>JUDGMENT</td><td><span class="pill lien">lien</span></td></tr>
+      <tr><td><code>LIEN</code></td><td>LIEN (federal/state tax/mechanics — type in description)</td><td><span class="pill lien">lien</span></td></tr>
+      <tr><td><code>LIS PENS</code></td><td>LIS PENDENS</td><td><span class="pill lien">lien</span></td></tr>
+      <tr><td><code>BKTCY</code></td><td>BANKRUPTCY</td><td><span class="pill lien">lien</span></td></tr>
+      <tr><td><code>SAT</code></td><td>SATISFACTION</td><td>sub-flag <code>rod_satisfaction_filed</code></td></tr>
+      <tr><td><code>PSAT</code></td><td>PARTIAL SATISFACTION</td><td>sub-flag</td></tr>
+      <tr><td><code>D/R</code></td><td>DEED OF RELEASE</td><td>sub-flag</td></tr>
+      <tr><td><code>P/REL D/T</code></td><td>PARTIAL RELEASE OF D/T</td><td>sub-flag</td></tr>
+      <tr><td><code>DEED OF GIFT</code></td><td>DEED OF GIFT (no consideration)</td><td><span class="pill transfer">transfer</span></td></tr>
+      <tr><td><code>SEP AGMT</code></td><td>SEPARATION AGREEMENT</td><td><span class="pill transfer">transfer</span></td></tr>
+      <tr><td><code>MEMO SEPR AGMT</code></td><td>MEMORANDUM OF SEPARATION AGMT</td><td><span class="pill transfer">transfer</span></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Join strategy</h2>
+  <p>Every signal is attached to a parcel master record (PARID, format <code>R#####-###-###-###</code>) using the strongest available join:</p>
+
+  <ul>
+    <li><strong>Direct PARID:</strong> delinquent tax CSV, NHC foreclosures HTML, EnerGov permits, stormwater. These all carry the parcel ID directly.</li>
+    <li><strong>Decedent-name join:</strong> StarNews Notice to Creditors. Decedent name is normalized and matched against owner_keys built from <code>OWN1</code>. A top-50-surnames guard prevents <code>JONES JOHN</code> from joining hundreds of parcels.</li>
+    <li><strong>Address-key join:</strong> StarNews foreclosure body — regex extracts likely address strings, normalizes street name + suffix, joins to <code>(street_num, street_name)</code> index over PropertyOwners.</li>
+    <li><strong>Reverse-party owner-name join:</strong> Register of Deeds — NHC ROD records carry no parcel ID. Reverse-party name is matched against owner_keys with two filters: governmental plaintiffs (<code>CITY OF</code>, <code>DEPARTMENT OF</code>, <code>UNITED STATES</code>, etc.) and corporate entities (<code>LLC</code>, <code>INC</code>, etc.) are skipped — they would explode to thousands of false-positive parcels.</li>
+  </ul>
+
+  <h2>What's not included (and why)</h2>
+  <ul>
+    <li>No skip trace — phone / email columns are placeholders for downstream skip-trace vendors.</li>
+    <li>No AVM, MLS pricing, mortgage balance, lender data — out of scope; assessed value (<code>APRTOT</code>) is the only value baseline.</li>
+    <li>No year-built — NHC PropertyOwners feed doesn't expose it. Would require per-parcel etax Datalet scrape; deferred.</li>
+    <li>No exemption flags (homestead / senior / disabled veteran) — same reason.</li>
+    <li>No ML scoring — every signal is rule-driven and explainable. <code>raw_score</code> is for in-tier sorting only and never promotes tier.</li>
+  </ul>
+
+  <h2>Daily refresh</h2>
+  <p>The pipeline is built for daily live data. <code>pipeline/refresh.py</code> runs every scraper in dependency order, regenerates <code>leads.json</code>, runs the Two-Truths check, and pushes to GitHub. Windows Task Scheduler (config in <code>scripts/daily_refresh.xml</code>) runs it at 4 AM Central.</p>
+  <p>The header <code>generated_at</code> on the dashboard is the timestamp of the most recent successful pipeline run. <code>HEARTBEAT.json</code> in the repo root tracks per-source last_success for operations alerting.</p>
+
+  <h2>Anti-bot encounters honestly</h2>
+  <ul>
+    <li>NHC ArcGIS, ROD BIS PHP, StarNews Gannett iPublish, NHC delinquent CSV, NHC foreclosures HTML — all open. No CAPTCHA, no Cloudflare WAF, no login wall.</li>
+    <li>eCourts (Tyler Odyssey) — AWS WAF CAPTCHA, blocked.</li>
+    <li>Wilmington EnerGov SelfService — Tyler SPA + CSRF token, requires Playwright.</li>
+    <li>Munis Self Service — Tyler Portico OAuth + AntiXsrfToken, redundant with the CSV anyway.</li>
+    <li>iasWorld etax — disclaimer-accept POST + viewstate, used as deep-link target only.</li>
+  </ul>
+
+  <div class="meta">
+    Last refresh: <code id="generated_at">—</code> · Source commit <code id="source_commit">—</code> · <a href="index.html">← back to dashboard</a>
+  </div>
+</div>
+<script>
+  fetch("data/leads.json?t=" + Date.now()).then(r => r.json()).then(j => {
+    document.getElementById("generated_at").textContent =
+      j.generated_at ? new Date(j.generated_at).toUTCString() : "—";
+    document.getElementById("source_commit").textContent = j.source_commit || "—";
+  }).catch(() => {});
+</script>
+</body>
+</html>
