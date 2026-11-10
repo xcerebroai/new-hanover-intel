@@ -3,103 +3,103 @@
   "per_source": {
     "property_owners": {
       "ok": true,
-      "elapsed_sec": 1.2,
-      "last_attempt_at": "2026-11-09T10:00:02.909303+00:00",
-      "last_success_at": "2026-11-09T10:00:02.909303+00:00"
+      "elapsed_sec": 1.1,
+      "last_attempt_at": "2026-11-10T10:00:03.105513+00:00",
+      "last_success_at": "2026-11-10T10:00:03.105513+00:00"
     },
     "energov_permits_demolition": {
       "ok": false,
-      "elapsed_sec": 16.2,
-      "last_attempt_at": "2026-11-09T10:00:19.114554+00:00"
+      "elapsed_sec": 16.5,
+      "last_attempt_at": "2026-11-10T10:00:19.565223+00:00"
     },
     "energov_permits_floodplain": {
       "ok": false,
       "elapsed_sec": 16.1,
-      "last_attempt_at": "2026-11-09T10:00:35.246747+00:00"
+      "last_attempt_at": "2026-11-10T10:00:35.680045+00:00"
     },
     "energov_permits_occupancy": {
       "ok": false,
-      "elapsed_sec": 16.1,
-      "last_attempt_at": "2026-11-09T10:00:51.361506+00:00"
+      "elapsed_sec": 16.2,
+      "last_attempt_at": "2026-11-10T10:00:51.832896+00:00"
     },
     "nhc_stormwater": {
       "ok": true,
-      "elapsed_sec": 1.1,
-      "last_attempt_at": "2026-11-09T10:00:52.475301+00:00",
-      "last_success_at": "2026-11-09T10:00:52.475301+00:00"
+      "elapsed_sec": 1.3,
+      "last_attempt_at": "2026-11-10T10:00:53.173356+00:00",
+      "last_success_at": "2026-11-10T10:00:53.173356+00:00"
     },
     "delinquent_tax": {
-      "ok": true,
-      "elapsed_sec": 0.4,
-      "last_attempt_at": "2026-11-09T10:00:52.833775+00:00",
-      "last_success_at": "2026-11-09T10:00:52.833775+00:00"
+      "ok": false,
+      "elapsed_sec": 0.3,
+      "last_attempt_at": "2026-11-10T10:00:53.466435+00:00"
     },
     "nhc_foreclosures": {
       "ok": true,
       "elapsed_sec": 0.5,
-      "last_attempt_at": "2026-11-09T10:00:53.323676+00:00",
-      "last_success_at": "2026-11-09T10:00:53.323676+00:00"
+      "last_attempt_at": "2026-11-10T10:00:53.966472+00:00",
+      "last_success_at": "2026-11-10T10:00:53.966472+00:00"
     },
     "starnews_legals": {
       "ok": true,
-      "elapsed_sec": 5.8,
-      "last_attempt_at": "2026-11-09T10:00:59.131315+00:00",
-      "last_success_at": "2026-11-09T10:00:59.131315+00:00"
+      "elapsed_sec": 18.1,
+      "last_attempt_at": "2026-11-10T10:01:12.112076+00:00",
+      "last_success_at": "2026-11-10T10:01:12.112076+00:00"
     },
     "rod_foreclosure": {
-      "ok": false,
-      "elapsed_sec": 35.6,
-      "last_attempt_at": "2026-11-09T10:01:34.775081+00:00"
+      "ok": true,
+      "elapsed_sec": 77.3,
+      "last_attempt_at": "2026-11-10T10:02:29.372283+00:00",
+      "last_success_at": "2026-11-10T10:02:29.372283+00:00"
     },
     "rod_estate_deed": {
-      "ok": false,
-      "elapsed_sec": 35.7,
-      "last_attempt_at": "2026-11-09T10:02:10.439173+00:00"
+      "ok": true,
+      "elapsed_sec": 76.0,
+      "last_attempt_at": "2026-11-10T10:03:45.335402+00:00",
+      "last_success_at": "2026-11-10T10:03:45.335402+00:00"
     },
     "rod_judgment": {
-      "ok": false,
-      "elapsed_sec": 35.7,
-      "last_attempt_at": "2026-11-09T10:02:46.169773+00:00"
+      "ok": true,
+      "elapsed_sec": 4.7,
+      "last_attempt_at": "2026-11-10T10:03:50.005325+00:00",
+      "last_success_at": "2026-11-10T10:03:50.005325+00:00"
     },
     "rod_lien": {
-      "ok": false,
-      "elapsed_sec": 35.9,
-      "last_attempt_at": "2026-11-09T10:03:22.116974+00:00"
+      "ok": true,
+      "elapsed_sec": 4.7,
+      "last_attempt_at": "2026-11-10T10:03:54.658434+00:00",
+      "last_success_at": "2026-11-10T10:03:54.658434+00:00"
     },
     "rod_quitclaim": {
-      "ok": false,
-      "elapsed_sec": 35.7,
-      "last_attempt_at": "2026-11-09T10:03:57.800631+00:00"
+      "ok": true,
+      "elapsed_sec": 4.7,
+      "last_attempt_at": "2026-11-10T10:03:59.393589+00:00",
+      "last_success_at": "2026-11-10T10:03:59.393589+00:00"
     },
     "rod_deed_of_gift": {
-      "ok": false,
-      "elapsed_sec": 35.7,
-      "last_attempt_at": "2026-11-09T10:04:33.467195+00:00"
+      "ok": true,
+      "elapsed_sec": 11.8,
+      "last_attempt_at": "2026-11-10T10:04:11.235546+00:00",
+      "last_success_at": "2026-11-10T10:04:11.235546+00:00"
     },
     "rod_separation": {
-      "ok": false,
-      "elapsed_sec": 35.8,
-      "last_attempt_at": "2026-11-09T10:05:09.272452+00:00"
+      "ok": true,
+      "elapsed_sec": 4.7,
+      "last_attempt_at": "2026-11-10T10:04:15.901880+00:00",
+      "last_success_at": "2026-11-10T10:04:15.901880+00:00"
     },
     "rod_satisfaction": {
       "ok": false,
-      "elapsed_sec": 36.0,
-      "last_attempt_at": "2026-11-09T10:05:45.316223+00:00"
+      "elapsed_sec": 312.6,
+      "last_attempt_at": "2026-11-10T10:09:28.542836+00:00"
     }
   },
   "failed_sources": [
     "energov_permits_demolition",
     "energov_permits_floodplain",
     "energov_permits_occupancy",
-    "rod_foreclosure",
-    "rod_estate_deed",
-    "rod_judgment",
-    "rod_lien",
-    "rod_quitclaim",
-    "rod_deed_of_gift",
-    "rod_separation",
+    "delinquent_tax",
     "rod_satisfaction"
   ],
-  "last_pipeline_at": "2026-11-09T10:06:22.879646+00:00",
+  "last_pipeline_at": "2026-11-10T10:09:49.102630+00:00",
   "last_pipeline_ok": true
 }
