@@ -3,87 +3,87 @@
   "per_source": {
     "property_owners": {
       "ok": true,
-      "elapsed_sec": 40.3,
-      "last_attempt_at": "2026-11-15T10:00:42.511556+00:00",
-      "last_success_at": "2026-11-15T10:00:42.511556+00:00"
+      "elapsed_sec": 1.0,
+      "last_attempt_at": "2026-11-16T10:00:03.209505+00:00",
+      "last_success_at": "2026-11-16T10:00:03.209505+00:00"
     },
     "energov_permits_demolition": {
       "ok": false,
       "elapsed_sec": 16.2,
-      "last_attempt_at": "2026-11-15T10:00:58.754720+00:00"
+      "last_attempt_at": "2026-11-16T10:00:19.435474+00:00"
     },
     "energov_permits_floodplain": {
       "ok": false,
-      "elapsed_sec": 16.2,
-      "last_attempt_at": "2026-11-15T10:01:14.909429+00:00"
+      "elapsed_sec": 16.1,
+      "last_attempt_at": "2026-11-16T10:00:35.584976+00:00"
     },
     "energov_permits_occupancy": {
       "ok": false,
       "elapsed_sec": 16.1,
-      "last_attempt_at": "2026-11-15T10:01:31.060142+00:00"
+      "last_attempt_at": "2026-11-16T10:00:51.709915+00:00"
     },
     "nhc_stormwater": {
       "ok": true,
-      "elapsed_sec": 1.1,
-      "last_attempt_at": "2026-11-15T10:01:32.188057+00:00",
-      "last_success_at": "2026-11-15T10:01:32.188057+00:00"
+      "elapsed_sec": 0.9,
+      "last_attempt_at": "2026-11-16T10:00:52.568390+00:00",
+      "last_success_at": "2026-11-16T10:00:52.568390+00:00"
     },
     "delinquent_tax": {
       "ok": false,
       "elapsed_sec": 0.3,
-      "last_attempt_at": "2026-11-15T10:01:32.514166+00:00"
+      "last_attempt_at": "2026-11-16T10:00:52.909605+00:00"
     },
     "nhc_foreclosures": {
       "ok": true,
-      "elapsed_sec": 0.5,
-      "last_attempt_at": "2026-11-15T10:01:33.024189+00:00",
-      "last_success_at": "2026-11-15T10:01:33.024189+00:00"
+      "elapsed_sec": 0.7,
+      "last_attempt_at": "2026-11-16T10:00:53.632319+00:00",
+      "last_success_at": "2026-11-16T10:00:53.632319+00:00"
     },
     "starnews_legals": {
       "ok": true,
-      "elapsed_sec": 5.8,
-      "last_attempt_at": "2026-11-15T10:01:38.806537+00:00",
-      "last_success_at": "2026-11-15T10:01:38.806537+00:00"
+      "elapsed_sec": 15.3,
+      "last_attempt_at": "2026-11-16T10:01:08.892115+00:00",
+      "last_success_at": "2026-11-16T10:01:08.892115+00:00"
     },
     "rod_foreclosure": {
       "ok": false,
-      "elapsed_sec": 35.6,
-      "last_attempt_at": "2026-11-15T10:02:14.439516+00:00"
+      "elapsed_sec": 35.7,
+      "last_attempt_at": "2026-11-16T10:01:44.642706+00:00"
     },
     "rod_estate_deed": {
       "ok": false,
       "elapsed_sec": 35.7,
-      "last_attempt_at": "2026-11-15T10:02:50.158340+00:00"
+      "last_attempt_at": "2026-11-16T10:02:20.367746+00:00"
     },
     "rod_judgment": {
       "ok": false,
       "elapsed_sec": 35.7,
-      "last_attempt_at": "2026-11-15T10:03:25.862885+00:00"
+      "last_attempt_at": "2026-11-16T10:02:56.068532+00:00"
     },
     "rod_lien": {
       "ok": false,
       "elapsed_sec": 35.6,
-      "last_attempt_at": "2026-11-15T10:04:01.515157+00:00"
+      "last_attempt_at": "2026-11-16T10:03:31.710010+00:00"
     },
     "rod_quitclaim": {
       "ok": false,
-      "elapsed_sec": 35.7,
-      "last_attempt_at": "2026-11-15T10:04:37.250521+00:00"
+      "elapsed_sec": 54.5,
+      "last_attempt_at": "2026-11-16T10:04:26.199656+00:00"
     },
     "rod_deed_of_gift": {
       "ok": false,
-      "elapsed_sec": 35.8,
-      "last_attempt_at": "2026-11-15T10:05:13.006867+00:00"
+      "elapsed_sec": 35.7,
+      "last_attempt_at": "2026-11-16T10:05:01.918843+00:00"
     },
     "rod_separation": {
       "ok": false,
       "elapsed_sec": 35.8,
-      "last_attempt_at": "2026-11-15T10:05:48.771513+00:00"
+      "last_attempt_at": "2026-11-16T10:05:37.676194+00:00"
     },
     "rod_satisfaction": {
       "ok": false,
       "elapsed_sec": 35.7,
-      "last_attempt_at": "2026-11-15T10:06:24.502754+00:00"
+      "last_attempt_at": "2026-11-16T10:06:13.344849+00:00"
     }
   },
   "failed_sources": [
@@ -100,6 +100,6 @@
     "rod_separation",
     "rod_satisfaction"
   ],
-  "last_pipeline_at": "2026-11-15T10:07:14.584412+00:00",
+  "last_pipeline_at": "2026-11-16T10:07:03.215840+00:00",
   "last_pipeline_ok": true
 }
